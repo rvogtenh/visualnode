@@ -74,13 +74,32 @@ visual-node-mvp/
 
 ---
 
-## Phase 2 Next
+## Raspberry Pi Setup (Phase 2)
 
-Deploy to Raspberry Pi 5 + PiSound:
-
+**Deploy / update:**
 ```bash
-rsync -av projects_visualnode/visual-node-mvp/ patch@patchbox.local:~/visualnode/
-ssh patch@patchbox.local "DISPLAY=:0 chromium-browser --kiosk --autoplay-policy=no-user-gesture-required http://localhost:3000"
+rsync -av --exclude='.git' --exclude='.DS_Store' \
+  projects_visualnode/visual-node-mvp/ \
+  patch@patchbox.local:~/visualnode/
+```
+
+**On the Pi (one-time setup, already done):**
+- Node.js 20 installed via NodeSource
+- `visualnode.service` systemd unit — starts server on boot
+- LXDE autostart: `~/.config/autostart/visualnode.desktop`
+- JACK disabled (PipeWire handles audio for Chromium)
+- Chromium profile: `~/.chromium-visualnode` (audio permission granted)
+- Chromium flags: `--use-gl=egl --ignore-gpu-blocklist --enable-gpu-rasterization`
+
+**SSH access** (Salt_netz WiFi only):
+```bash
+ssh patch@patchbox.local   # or alias: batch
+```
+
+**Restart server / Chromium via SSH:**
+```bash
+ssh patch@patchbox.local "sudo systemctl restart visualnode"
+ssh patch@patchbox.local "DISPLAY=:0 pkill chromium; sleep 1 && DISPLAY=:0 chromium-browser --kiosk --use-gl=egl --ignore-gpu-blocklist --user-data-dir=/home/patch/.chromium-visualnode http://localhost:3000 &"
 ```
 
 See [Visual-Node-Entwicklungsplan.md](../../docs/visualnode/Visual-Node-Entwicklungsplan.md) for full roadmap.
@@ -92,7 +111,7 @@ See [Visual-Node-Entwicklungsplan.md](../../docs/visualnode/Visual-Node-Entwickl
 | Phase | Status | Date |
 |-------|--------|------|
 | 1 — Local MVP (Mac) | ✅ Done | 2026-03-18 |
-| 2 — Raspberry + PiSound Kiosk | ⬜ Open | — |
+| 2 — Raspberry + PiSound Kiosk | ✅ Done | 2026-03-18 |
 | 3 — Faderfox UC4 MIDI | ⬜ Open | — |
 | 4 — Random System | ⬜ Open | — |
 | 5 — Salt Sample Sync | ⬜ Open | — |

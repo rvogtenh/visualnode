@@ -140,6 +140,8 @@ async function startAudio() {
     return true;
   } catch (e) {
     console.error('Audio:', e);
+    // Store error name globally so UI can show it
+    window._audioError = e.name + ': ' + e.message;
     return false;
   }
 }
@@ -246,7 +248,7 @@ startBtn.addEventListener('click', async () => {
     ui.classList.remove('hidden');
     requestAnimationFrame(render);
   } else {
-    statusEl.textContent = 'Microphone access denied. Check browser permissions.';
+    statusEl.textContent = 'Audio error: ' + (window._audioError || 'unknown');
   }
 });
 
