@@ -6,7 +6,9 @@ precision highp float;
 
 uniform float     time;
 uniform vec2      resolution;
-uniform vec4      bands;        // x=bass(20-120Hz), y=low(120-500Hz), z=mid(500-4kHz), w=high(4k-20kHz)
+uniform vec4      bands;   // x=bass, y=low, z=mid, w=high  (0..1, current level)
+uniform vec4      onset;   // x=bass, y=low, z=mid, w=high  (0..1, attack detector, hold+decay)
+uniform vec4      delta;   // x=bass, y=low, z=mid, w=high  (signed change per frame, amplified)
 uniform sampler2D backbuffer;
 
 // ---- Constants -----------------------------------------------

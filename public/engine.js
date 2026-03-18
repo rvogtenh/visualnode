@@ -107,6 +107,8 @@ function getUniforms(prog) {
     time:       gl.getUniformLocation(prog, 'time'),
     resolution: gl.getUniformLocation(prog, 'resolution'),
     bands:      gl.getUniformLocation(prog, 'bands'),
+    onset:      gl.getUniformLocation(prog, 'onset'),
+    delta:      gl.getUniformLocation(prog, 'delta'),
     backbuffer: gl.getUniformLocation(prog, 'backbuffer'),
   };
 }
@@ -119,7 +121,10 @@ const blitUniforms = {
 };
 
 // ---- Audio analysis --------------------------------------------
-let bands = [0, 0, 0, 0];
+let bands  = [0, 0, 0, 0];
+let onset  = [0, 0, 0, 0]; // positive attack (hold + decay), 0..1
+let delta  = [0, 0, 0, 0]; // signed per-frame change, amplified
+let _prevBands = [0, 0, 0, 0];
 let audioCtx, analyser, dataArray;
 
 async function startAudio() {
@@ -160,6 +165,16 @@ function getBands() {
   bands[1] = Math.min(bandRMS(120,  500)  * 4.5, 1.0);
   bands[2] = Math.min(bandRMS(500,  4000) * 3.5, 1.0);
   bands[3] = Math.min(bandRMS(4000, 20000)* 5.5, 1.0);
+
+  // onset: hold-and-decay attack detector per band
+  // delta: signed per-frame change (amplified for shader use)
+  for (let i = 0; i < 4; i++) {
+    const d   = bands[i] - _prevBands[i];
+    delta[i]  = Math.max(-1, Math.min(1, d * 8.0));
+    const atk = Math.max(0, d) * 7.0;
+    onset[i]  = Math.min(1.0, Math.max(atk, onset[i] * 0.65));
+    _prevBands[i] = bands[i];
+  }
 }
 
 // ---- Render loop -----------------------------------------------
@@ -196,7 +211,9 @@ function render(timestamp) {
   bindQuad(prog);
   gl.uniform1f(u.time, t);
   gl.uniform2f(u.resolution, w, h);
-  gl.uniform4f(u.bands, bands[0], bands[1], bands[2], bands[3]);
+  gl.uniform4f(u.bands,  bands[0],  bands[1],  bands[2],  bands[3]);
+  gl.uniform4f(u.onset,  onset[0],  onset[1],  onset[2],  onset[3]);
+  gl.uniform4f(u.delta,  delta[0],  delta[1],  delta[2],  delta[3]);
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, readFBO.tex);
   gl.uniform1i(u.backbuffer, 0);
