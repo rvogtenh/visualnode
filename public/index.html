@@ -12,10 +12,9 @@
     position: fixed; top: 0; left: 0; right: 0;
     display: flex; justify-content: space-between; align-items: center;
     padding: 10px 16px;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.55);
     color: #aaa; font-family: monospace; font-size: 12px;
-    z-index: 10;
-    transition: opacity 0.5s;
+    z-index: 10; transition: opacity 0.4s;
   }
   #ui.hidden { opacity: 0; pointer-events: none; }
 
@@ -26,13 +25,12 @@
     background: #000; color: #fff;
     font-family: monospace; z-index: 20; gap: 20px;
   }
-  #start-screen h1 { font-size: 1.4em; font-weight: normal; letter-spacing: 0.2em; color: #888; }
+  #start-screen h1 { font-size: 1.4em; font-weight: normal; letter-spacing: 0.2em; color: #777; }
   #start-btn {
     padding: 12px 32px; border: 1px solid #555;
     background: transparent; color: #fff;
-    font-family: monospace; font-size: 14px;
-    cursor: pointer; letter-spacing: 0.1em;
-    transition: border-color 0.2s, color 0.2s;
+    font-family: monospace; font-size: 14px; letter-spacing: 0.1em;
+    cursor: pointer; transition: border-color 0.2s;
   }
   #start-btn:hover { border-color: #fff; }
   #status { font-size: 11px; color: #555; }
@@ -57,16 +55,12 @@
 
 <div id="ui" class="hidden">
   <div id="info">fps: — | bass: — | mid: — | high: —</div>
-  <select id="shader-select">
-    <option value="0">Interference Collapse</option>
-    <option value="1">Stochastic Jump</option>
-    <option value="2">Threshold Flip</option>
-  </select>
-  <div>H = toggle UI</div>
+  <select id="shader-select"></select>
+  <div>H = toggle UI &nbsp;|&nbsp; 1–4 = scenes</div>
 </div>
 
 <!-- ============================================================
-     VERTEX SHADER (shared)
+     VERTEX SHADER
      ============================================================ -->
 <script id="vs" type="x-shader/x-vertex">
 attribute vec2 a_pos;
@@ -74,7 +68,7 @@ void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }
 </script>
 
 <!-- ============================================================
-     SCREEN BLIT SHADER — renders ping-pong texture to canvas
+     SCREEN BLIT SHADER
      ============================================================ -->
 <script id="fs-blit" type="x-shader/x-fragment">
 precision mediump float;
@@ -86,326 +80,46 @@ void main() {
 }
 </script>
 
-<!-- ============================================================
-     GLSL HELPERS — The Force compatible
-     ============================================================ -->
-<script id="glsl-helpers" type="x-shader/x-fragment">
-precision highp float;
-
-uniform float     time;
-uniform vec2      resolution;
-uniform vec4      bands;        // x=bass, y=low, z=mid, w=high
-uniform sampler2D backbuffer;
-
-// ---- Constants -----------------------------------------------
-const float PI  = 3.14159265358979323846;
-const float PI2 = 6.28318530717958647692;
-
-// ---- Colors --------------------------------------------------
-const vec3 black  = vec3(0.0);
-const vec3 white  = vec3(1.0);
-const vec3 red    = vec3(1.0, 0.0, 0.0);
-const vec3 green  = vec3(0.0, 1.0, 0.0);
-const vec3 blue   = vec3(0.05, 0.1, 0.9);
-const vec3 teal   = vec3(0.0, 0.75, 0.75);
-const vec3 purple = vec3(0.5, 0.0, 1.0);
-const vec3 orange = vec3(1.0, 0.45, 0.0);
-const vec3 yellow = vec3(1.0, 1.0, 0.0);
-
-// ---- Coordinate helpers (The Force compatible) ---------------
-vec2 uv() {
-  return (gl_FragCoord.xy - resolution * 0.5) / min(resolution.x, resolution.y) * 2.0;
-}
-vec2 uvN() {
-  return gl_FragCoord.xy / resolution;
-}
-
-// ---- Rotate --------------------------------------------------
-vec2 rotate(vec2 p, vec2 center, float angle) {
-  float s = sin(angle); float c = cos(angle);
-  p -= center;
-  return vec2(p.x * c - p.y * s, p.x * s + p.y * c) + center;
-}
-
-// ---- HSV → RGB -----------------------------------------------
-vec3 hsv2rgb(vec3 c) {
-  vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
-  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-
-// ---- 3D Simplex Noise (Stefan Gustavson) ---------------------
-vec3 _mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
-vec4 _mod289(vec4 x){ return x - floor(x*(1.0/289.0))*289.0; }
-vec4 _permute(vec4 x){ return _mod289(((x*34.0)+1.0)*x); }
-vec4 _taylorInvSqrt(vec4 r){ return 1.79284291400159-0.85373472095314*r; }
-
-float snoise(vec3 v) {
-  const vec2 C = vec2(1.0/6.0, 1.0/3.0);
-  const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
-  vec3 i = floor(v + dot(v, C.yyy));
-  vec3 x0 = v - i + dot(i, C.xxx);
-  vec3 g = step(x0.yzx, x0.xyz);
-  vec3 l = 1.0 - g;
-  vec3 i1 = min(g.xyz, l.zxy);
-  vec3 i2 = max(g.xyz, l.zxy);
-  vec3 x1 = x0 - i1 + C.xxx;
-  vec3 x2 = x0 - i2 + C.yyy;
-  vec3 x3 = x0 - D.yyy;
-  i = _mod289(i);
-  vec4 p = _permute(_permute(_permute(
-    i.z + vec4(0.0,i1.z,i2.z,1.0))
-    + i.y + vec4(0.0,i1.y,i2.y,1.0))
-    + i.x + vec4(0.0,i1.x,i2.x,1.0));
-  float n_ = 0.142857142857;
-  vec3 ns = n_ * D.wyz - D.xzx;
-  vec4 j = p - 49.0*floor(p*ns.z*ns.z);
-  vec4 x_ = floor(j*ns.z);
-  vec4 y_ = floor(j - 7.0*x_);
-  vec4 x = x_*ns.x + ns.yyyy;
-  vec4 y = y_*ns.x + ns.yyyy;
-  vec4 h = 1.0 - abs(x) - abs(y);
-  vec4 b0 = vec4(x.xy, y.xy);
-  vec4 b1 = vec4(x.zw, y.zw);
-  vec4 s0 = floor(b0)*2.0 + 1.0;
-  vec4 s1 = floor(b1)*2.0 + 1.0;
-  vec4 sh = -step(h, vec4(0.0));
-  vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
-  vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
-  vec3 p0 = vec3(a0.xy, h.x);
-  vec3 p1 = vec3(a0.zw, h.y);
-  vec3 p2 = vec3(a1.xy, h.z);
-  vec3 p3 = vec3(a1.zw, h.w);
-  vec4 norm = _taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
-  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
-  vec4 m = max(0.6 - vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)), 0.0);
-  m = m*m;
-  return 42.0 * dot(m*m, vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
-}
-
-// ---- FBM (fractal brownian motion) ---------------------------
-float fbm(vec3 p, int octaves) {
-  float v = 0.0, a = 0.5;
-  vec3  sh = vec3(100.3, 200.7, 50.1);
-  for (int i = 0; i < 8; i++) {
-    if (i >= octaves) break;
-    v += a * (snoise(p) * 0.5 + 0.5);
-    p  = p * 2.0 + sh;
-    a *= 0.5;
-  }
-  return v;
-}
-
-// ---- Voronoi -------------------------------------------------
-// Returns vec2(minDist, id)
-vec2 voronoi(vec3 p) {
-  vec3 b = floor(p);
-  vec3 f = fract(p);
-  float md = 8.0; float id = 0.0;
-  for (int z = -1; z <= 1; z++)
-  for (int y = -1; y <= 1; y++)
-  for (int x = -1; x <= 1; x++) {
-    vec3 nb = b + vec3(float(x), float(y), float(z));
-    vec3 rp = vec3(
-      fract(sin(dot(nb, vec3(127.1, 311.7,  74.3))) * 43758.5),
-      fract(sin(dot(nb, vec3(269.5, 183.3, 246.1))) * 43758.5),
-      fract(sin(dot(nb, vec3( 74.3, 246.1, 183.3))) * 43758.5)
-    );
-    vec3 r = vec3(float(x), float(y), float(z)) + rp - f;
-    float d = dot(r, r);
-    if (d < md) { md = d; id = fract(sin(dot(nb, vec3(3.1,7.3,2.7)))*43758.5); }
-  }
-  return vec2(sqrt(md), id);
-}
-
-// ---- RMF (Ridged Multifractal) --------------------------------
-float rmf(vec2 p, int octaves) {
-  float v = 0.0, a = 0.5, w = 1.0;
-  vec2  sh = vec2(100.3, 200.7);
-  for (int i = 0; i < 8; i++) {
-    if (i >= octaves) break;
-    float n = 1.0 - abs(snoise(vec3(p, 0.0)));
-    n = n * n * w;
-    v += n * a;
-    w  = clamp(n * 2.0, 0.0, 1.0);
-    p  = p * 2.17 + sh;
-    a *= 0.5;
-  }
-  return v;
-}
+<!-- GLSL helpers and scene registry (loaded before engine) -->
+<script>
+  const SCENES = [];
+  function registerScene(s) { SCENES.push(s); }
 </script>
+<script src="glsl-helpers.js"></script>
+<script src="scenes/interference-collapse.js"></script>
+<script src="scenes/stochastic-jump.js"></script>
+<script src="scenes/threshold-flip.js"></script>
+<script src="scenes/chromatic-storm.js"></script>
 
 <!-- ============================================================
-     SHADER 0 — INTERFERENCE COLLAPSE
-     ============================================================ -->
-<script id="fs-0" type="x-shader/x-fragment">
-void main() {
-  vec2 p  = uv();
-  vec2 pn = uvN();
-
-  float sub  = bands.x;
-  float low  = bands.y;
-  float mid  = bands.z;
-  float high = bands.w;
-
-  float freq1  = 3.0 + low  * 4.0;
-  float freq2  = 3.1 + mid  * 4.0;
-  float speed1 = time * 0.15 + sub  * 0.5;
-  float speed2 = time * 0.17 + high * 0.5;
-
-  float f1 = fbm(vec3(rotate(p, vec2(0.0),  speed1) * freq1, speed1), 5);
-  float f2 = snoise(vec3(rotate(p, vec2(0.2), -speed2) * freq2, speed2)) * 0.5 + 0.5;
-
-  float product = f1 * f2;
-  float diff    = abs(f1 - f2);
-  float sum     = (f1 + f2) * 0.5;
-
-  float stripes  = sin(product * PI2 * (4.0 + mid * 6.0) + time * 0.3) * 0.5 + 0.5;
-  float collapse = 1.0 - smoothstep(0.0, 0.15 + high * 0.1, diff);
-
-  float surface = mix(sum, stripes,   0.4 + mid  * 0.4);
-  surface       = mix(surface, collapse, 0.3 + high * 0.3);
-
-  vec2 drift = vec2(
-    sin(time * 0.07) * sub  * 0.008,
-    cos(time * 0.05) * high * 0.006
-  );
-  vec4  prev   = texture2D(backbuffer, pn + drift);
-  float fbkStr = 0.88 - (mid + high) * 0.06;
-  surface = mix(prev.r * fbkStr, surface, 0.2 + mid * 0.15);
-
-  vec3 baseCol     = mix(black,     vec3(0.08, 0.05, 0.12), sum);
-  vec3 stripeCol   = mix(baseCol,   purple,  stripes  * (0.4 + low));
-  vec3 collapseCol = mix(stripeCol, white,   collapse * (0.6 + high));
-  collapseCol      = mix(collapseCol, orange, sub * sub * 0.4);
-
-  vec2  vc  = pn - 0.5;
-  float vig = 1.0 - dot(vc, vc) * 1.8;
-  collapseCol *= clamp(vig, 0.0, 1.0);
-
-  gl_FragColor = vec4(collapseCol, 1.0);
-}
-</script>
-
-<!-- ============================================================
-     SHADER 1 — STOCHASTIC JUMP
-     ============================================================ -->
-<script id="fs-1" type="x-shader/x-fragment">
-void main() {
-  vec2 p  = uv();
-  vec2 pn = uvN();
-
-  float sub    = bands.x;
-  float mid    = bands.z;
-  float high   = bands.w;
-  float energy = (bands.x + bands.y + bands.z + bands.w) * 0.25;
-
-  float jumpSpeed = 0.5 + energy * 2.5;
-  float jumpTime  = floor(time * jumpSpeed);
-
-  float s0 = fract(sin(jumpTime * 127.1 + 1.0) * 43758.5);
-  float s1 = fract(sin(jumpTime * 311.7 + 2.0) * 43758.5);
-  float s2 = fract(sin(jumpTime * 74.3  + 3.0) * 43758.5);
-  float s3 = fract(sin(jumpTime * 191.9 + 4.0) * 43758.5);
-
-  float rScale = 2.0 + s0 * 5.0;
-  float rAngle = s1 * PI2;
-  float rMode  = s2;
-  float rHue   = s3;
-
-  vec2 pr = rotate(p, vec2(0.0), rAngle + time * 0.08);
-
-  float n0 = fbm(vec3(pr * rScale, time * 0.12), 5);
-  float n1 = voronoi(vec3(pr * rScale * 0.6, time * 0.1)).x;
-  float n2 = rmf(pr * rScale * 0.4, 4) * 0.5 + 0.5;
-
-  float surface = n0;
-  if (rMode > 0.33) surface = mix(n0, n1, (rMode - 0.33) * 3.0);
-  if (rMode > 0.66) surface = mix(n1, n2, (rMode - 0.66) * 3.0);
-  surface = clamp(surface, 0.0, 1.0);
-
-  vec4  prev  = texture2D(backbuffer, pn);
-  float blend = 0.2 + energy * 0.1;
-  surface = mix(prev.r * 0.9, surface, blend);
-
-  vec3 c0  = hsv2rgb(vec3(rHue,               0.8, 0.95));
-  vec3 c1  = hsv2rgb(vec3(fract(rHue + 0.45), 0.6, 0.7));
-  vec3 col = mix(black, c0, smoothstep(0.2, 0.65, surface));
-  col      = mix(col,   c1, smoothstep(0.6, 0.95, surface));
-  col     += vec3(0.02);
-  col     *= (0.5 + sub * 1.2);
-
-  gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
-}
-</script>
-
-<!-- ============================================================
-     SHADER 2 — THRESHOLD FLIP
-     ============================================================ -->
-<script id="fs-2" type="x-shader/x-fragment">
-void main() {
-  vec2 p  = uv();
-  vec2 pn = uvN();
-
-  float sub    = bands.x;
-  float low    = bands.y;
-  float mid    = bands.z;
-  float high   = bands.w;
-  float energy = pow((sub + low + mid + high) * 0.25, 0.5);
-
-  float threshold = 0.50;
-
-  // Mode A: crystalline, slow, cold
-  float na  = fbm(vec3(p * 2.5, time * 0.06), 6);
-  float na2 = snoise(vec3(p * 7.0, time * 0.04)) * 0.5 + 0.5;
-  float surfA = na * 0.7 + na2 * 0.3;
-  vec3 colA = mix(black, blue,  smoothstep(0.2, 0.6,  surfA));
-  colA      = mix(colA,  teal,  smoothstep(0.55, 0.9, surfA));
-  colA     += vec3(0.03, 0.04, 0.06);
-
-  // Mode B: chaotic, warm
-  vec2  pr  = rotate(p, vec2(0.0), time * 0.8 + sub * 2.5);
-  float nb  = fbm(vec3(pr * 3.0, time * 0.3), 4);
-  float nb2 = voronoi(vec3(p * (3.0 + mid * 6.0), time * 0.4)).x;
-  float surfB = nb * 0.2 + nb2 * 0.55;
-  vec3 colB = mix(black, white, smoothstep(0.5, 0.25, surfB));
-  colB      = mix(colB,  black, smoothstep(0.5, 0.95, surfB) * high * 2.0);
-  colB     += vec3(0.05, 0.06, 0.06);
-
-  float inB = step(threshold, energy);
-
-  vec4  prev  = texture2D(backbuffer, pn);
-  vec3  froze = mix(prev.rgb * 0.80, colA, 0.11);
-  vec3  col   = mix(froze, colB, inB);
-
-  float atEdge = step(threshold - 0.008, energy) * step(energy, threshold + 0.01);
-  col = mix(col, black * 0.8, atEdge);
-  col = mix(col, col * 1.4, 0.5);
-
-  gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
-}
-</script>
-
-<!-- ============================================================
-     MAIN JAVASCRIPT
+     ENGINE
      ============================================================ -->
 <script>
-(function() {
+(function () {
 'use strict';
 
-const canvas   = document.getElementById('canvas');
-const startScr = document.getElementById('start-screen');
-const startBtn = document.getElementById('start-btn');
-const statusEl = document.getElementById('status');
-const ui       = document.getElementById('ui');
-const infoEl   = document.getElementById('info');
-const shaderSel= document.getElementById('shader-select');
+const canvas    = document.getElementById('canvas');
+const startScr  = document.getElementById('start-screen');
+const startBtn  = document.getElementById('start-btn');
+const statusEl  = document.getElementById('status');
+const ui        = document.getElementById('ui');
+const infoEl    = document.getElementById('info');
+const shaderSel = document.getElementById('shader-select');
+
+// Populate dropdown from registered scenes
+SCENES.forEach((s, i) => {
+  const opt = document.createElement('option');
+  opt.value = i;
+  opt.textContent = s.name;
+  shaderSel.appendChild(opt);
+});
 
 // ---- WebGL init ----
 const gl = canvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: false });
 if (!gl) { statusEl.textContent = 'WebGL not supported'; return; }
 
-// ---- Fullscreen canvas ----
+// ---- Resize ----
+let fbos = [];
 function resize() {
   canvas.width  = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -420,28 +134,24 @@ function compileShader(type, src) {
   gl.shaderSource(s, src);
   gl.compileShader(s);
   if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
-    throw new Error('Shader compile error: ' + gl.getShaderInfoLog(s));
+    throw new Error(gl.getShaderInfoLog(s));
   return s;
 }
 
 function buildProgram(vsSrc, fsSrc) {
-  const helpers = document.getElementById('glsl-helpers').textContent;
-  const fullFs  = helpers + '\n' + fsSrc;
   const prog = gl.createProgram();
   gl.attachShader(prog, compileShader(gl.VERTEX_SHADER, vsSrc));
-  gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, fullFs));
+  gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, fsSrc));
   gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS))
-    throw new Error('Program link error: ' + gl.getProgramInfoLog(prog));
+    throw new Error(gl.getProgramInfoLog(prog));
   return prog;
 }
 
 // ---- Full-screen quad ----
 const quadBuf = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-  -1,-1,  1,-1,  -1,1,  1,1
-]), gl.STATIC_DRAW);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
 
 function bindQuad(prog) {
   const loc = gl.getAttribLocation(prog, 'a_pos');
@@ -451,7 +161,7 @@ function bindQuad(prog) {
 }
 
 // ---- Ping-pong FBOs ----
-let fbos = [];
+let pingpong = 0;
 
 function createFBO(w, h) {
   const tex = gl.createTexture();
@@ -464,44 +174,41 @@ function createFBO(w, h) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  return { tex, fbo, w, h };
+  return { tex, fbo };
 }
 
 function recreateFBOs() {
-  const w = canvas.width, h = canvas.height;
   fbos.forEach(f => { gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fbo); });
+  const w = canvas.width, h = canvas.height;
   fbos = [createFBO(w, h), createFBO(w, h)];
   pingpong = 0;
 }
 
-let pingpong = 0;
+// ---- Compile all scene programs ----
+const vsSrc    = document.getElementById('vs').textContent;
+const blitFSrc = document.getElementById('fs-blit').textContent;
 
-// ---- Build programs ----
-const vsSrc = document.getElementById('vs').textContent;
-
-const shaderPrograms = [0, 1, 2].map(i => {
+const programs = SCENES.map((scene, i) => {
   try {
-    const fs = document.getElementById('fs-' + i).textContent;
-    return buildProgram(vsSrc, fs);
-  } catch(e) {
-    console.error('Shader ' + i + ' error:', e.message);
+    const fullFS = window.GLSL_HELPERS + '\n' + scene.glsl;
+    return buildProgram(vsSrc, fullFS);
+  } catch (e) {
+    console.error(`Shader compile error in scene "${scene.name}":`, e.message);
     return null;
   }
 });
 
-const blitProg = buildProgram(vsSrc, document.getElementById('fs-blit').textContent);
-
-// ---- Uniform locations (per shader) ----
 function getUniforms(prog) {
   return {
-    time:        gl.getUniformLocation(prog, 'time'),
-    resolution:  gl.getUniformLocation(prog, 'resolution'),
-    bands:       gl.getUniformLocation(prog, 'bands'),
-    backbuffer:  gl.getUniformLocation(prog, 'backbuffer'),
+    time:       gl.getUniformLocation(prog, 'time'),
+    resolution: gl.getUniformLocation(prog, 'resolution'),
+    bands:      gl.getUniformLocation(prog, 'bands'),
+    backbuffer: gl.getUniformLocation(prog, 'backbuffer'),
   };
 }
 
-const uniforms     = shaderPrograms.map(p => p ? getUniforms(p) : null);
+const uniforms    = programs.map(p => p ? getUniforms(p) : null);
+const blitProg    = buildProgram(vsSrc, blitFSrc);
 const blitUniforms = {
   tex: gl.getUniformLocation(blitProg, 'u_tex'),
   res: gl.getUniformLocation(blitProg, 'u_res'),
@@ -513,16 +220,16 @@ let audioCtx, analyser, dataArray;
 
 async function startAudio() {
   try {
-    audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    const src  = audioCtx.createMediaStreamSource(stream);
-    analyser   = audioCtx.createAnalyser();
+    const src    = audioCtx.createMediaStreamSource(stream);
+    analyser     = audioCtx.createAnalyser();
     analyser.fftSize = 2048;
-    analyser.smoothingTimeConstant = 0.8;
+    analyser.smoothingTimeConstant = 0.75;
     src.connect(analyser);
-    dataArray  = new Float32Array(analyser.frequencyBinCount);
+    dataArray = new Float32Array(analyser.frequencyBinCount);
     return true;
-  } catch(e) {
+  } catch (e) {
     console.error('Audio error:', e);
     return false;
   }
@@ -532,11 +239,10 @@ function getBands() {
   if (!analyser) return;
   analyser.getFloatFrequencyData(dataArray);
 
-  const nyq = audioCtx.sampleRate / 2;
-  const len  = dataArray.length;
+  const nyq   = audioCtx.sampleRate / 2;
+  const len   = dataArray.length;
   const toIdx = hz => Math.min(Math.round(hz / nyq * len), len - 1);
 
-  // dB → linear, summed & normalised per band
   function bandRMS(lo, hi) {
     const a = toIdx(lo), b = toIdx(hi);
     let sum = 0, n = 0;
@@ -547,15 +253,14 @@ function getBands() {
     return Math.sqrt(sum / Math.max(n, 1));
   }
 
-  // x=sub/bass (20-120Hz), y=low (120-500Hz), z=mid (500-4kHz), w=high (4k-20kHz)
-  bands[0] = Math.min(bandRMS(20,   120)  * 6.0, 1.0);
-  bands[1] = Math.min(bandRMS(120,  500)  * 4.0, 1.0);
-  bands[2] = Math.min(bandRMS(500,  4000) * 3.0, 1.0);
-  bands[3] = Math.min(bandRMS(4000, 20000)* 5.0, 1.0);
+  bands[0] = Math.min(bandRMS(20,   120)  * 6.0, 1.0); // bass
+  bands[1] = Math.min(bandRMS(120,  500)  * 4.5, 1.0); // low
+  bands[2] = Math.min(bandRMS(500,  4000) * 3.5, 1.0); // mid
+  bands[3] = Math.min(bandRMS(4000, 20000)* 5.5, 1.0); // high
 }
 
 // ---- Render loop ----
-let currentShader = 0;
+let currentScene = 0;
 let startTime = null;
 let frameCount = 0, lastFpsTime = 0, fps = 0;
 
@@ -563,7 +268,6 @@ function render(timestamp) {
   if (!startTime) startTime = timestamp;
   const t = (timestamp - startTime) / 1000.0;
 
-  // FPS
   frameCount++;
   if (timestamp - lastFpsTime > 1000) {
     fps = Math.round(frameCount * 1000 / (timestamp - lastFpsTime));
@@ -573,43 +277,36 @@ function render(timestamp) {
 
   getBands();
 
-  const prog = shaderPrograms[currentShader];
-  const u    = uniforms[currentShader];
+  const prog = programs[currentScene];
+  const u    = uniforms[currentScene];
   if (!prog || !u) { requestAnimationFrame(render); return; }
 
   const w = canvas.width, h = canvas.height;
   const readFBO  = fbos[pingpong];
   const writeFBO = fbos[1 - pingpong];
 
-  // --- Render shader to writeFBO ---
+  // Render scene → writeFBO
   gl.bindFramebuffer(gl.FRAMEBUFFER, writeFBO.fbo);
   gl.viewport(0, 0, w, h);
-
   gl.useProgram(prog);
   bindQuad(prog);
-
   gl.uniform1f(u.time, t);
   gl.uniform2f(u.resolution, w, h);
   gl.uniform4f(u.bands, bands[0], bands[1], bands[2], bands[3]);
-
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, readFBO.tex);
   gl.uniform1i(u.backbuffer, 0);
-
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-  // --- Blit writeFBO to canvas ---
+  // Blit writeFBO → canvas
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.viewport(0, 0, w, h);
-
   gl.useProgram(blitProg);
   bindQuad(blitProg);
-
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, writeFBO.tex);
   gl.uniform1i(blitUniforms.tex, 0);
   gl.uniform2f(blitUniforms.res, w, h);
-
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
   pingpong = 1 - pingpong;
@@ -633,15 +330,19 @@ startBtn.addEventListener('click', async () => {
 });
 
 shaderSel.addEventListener('change', () => {
-  currentShader = parseInt(shaderSel.value);
+  currentScene = parseInt(shaderSel.value);
+  recreateFBOs(); // clear backbuffer on scene switch
 });
 
-// H to toggle UI
 document.addEventListener('keydown', e => {
-  if (e.key === 'h' || e.key === 'H') ui.classList.toggle('hidden');
-  if (e.key >= '1' && e.key <= '3') {
-    currentShader = parseInt(e.key) - 1;
-    shaderSel.value = currentShader;
+  if (e.key === 'h' || e.key === 'H') {
+    ui.classList.toggle('hidden');
+  }
+  const n = parseInt(e.key);
+  if (n >= 1 && n <= SCENES.length) {
+    currentScene = n - 1;
+    shaderSel.value = currentScene;
+    recreateFBOs();
   }
 });
 
