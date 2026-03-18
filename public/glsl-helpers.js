@@ -99,11 +99,11 @@ float snoise(vec3 v) {
   return 42.0 * dot(m*m, vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
 }
 
-// ---- FBM (fractal brownian motion, 6 octaves max) ------------
+// ---- FBM (fractal brownian motion, 4 octaves max for Pi perf) --
 float fbm(vec3 p, int octaves) {
   float v = 0.0, a = 0.5;
   vec3  sh = vec3(100.3, 200.7, 50.1);
-  for (int i = 0; i < 6; i++) {
+  for (int i = 0; i < 4; i++) {
     if (i >= octaves) break;
     v += a * (snoise(p) * 0.5 + 0.5);
     p  = p * 2.0 + sh;
@@ -112,32 +112,29 @@ float fbm(vec3 p, int octaves) {
   return v;
 }
 
-// ---- Voronoi — returns vec2(minDist, cellId) -----------------
+// ---- Voronoi — 2D+z, 9 iterations (was 3D/27) ----------------
+// p.z is used in the hash for animation, not for spatial lookup.
 vec2 voronoi(vec3 p) {
-  vec3 b = floor(p);
-  vec3 f = fract(p);
+  vec2 b = floor(p.xy);
+  vec2 f = fract(p.xy);
   float md = 8.0; float id = 0.0;
-  for (int z = -1; z <= 1; z++)
   for (int y = -1; y <= 1; y++)
   for (int x = -1; x <= 1; x++) {
-    vec3 nb = b + vec3(float(x), float(y), float(z));
-    vec3 rp = vec3(
-      fract(sin(dot(nb, vec3(127.1, 311.7,  74.3))) * 43758.5),
-      fract(sin(dot(nb, vec3(269.5, 183.3, 246.1))) * 43758.5),
-      fract(sin(dot(nb, vec3( 74.3, 246.1, 183.3))) * 43758.5)
-    );
-    vec3 r = vec3(float(x), float(y), float(z)) + rp - f;
+    vec2 nb = b + vec2(float(x), float(y));
+    float h1 = fract(sin(dot(nb, vec2(127.1, 311.7)) + p.z * 17.3) * 43758.5);
+    float h2 = fract(sin(dot(nb, vec2(269.5, 183.3)) + p.z * 31.7) * 43758.5);
+    vec2 r = vec2(float(x), float(y)) + vec2(h1, h2) - f;
     float d = dot(r, r);
-    if (d < md) { md = d; id = fract(sin(dot(nb, vec3(3.1,7.3,2.7)))*43758.5); }
+    if (d < md) { md = d; id = fract(sin(dot(nb, vec2(3.1, 7.3)) + p.z * 23.1) * 43758.5); }
   }
   return vec2(clamp(sqrt(md), 0.0, 1.0), id);
 }
 
-// ---- RMF (Ridged Multifractal, 5 octaves max) ----------------
+// ---- RMF (Ridged Multifractal, 4 octaves max) ----------------
 float rmf(vec2 p, int octaves) {
   float v = 0.0, a = 0.5, w = 1.0;
   vec2  sh = vec2(100.3, 200.7);
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 4; i++) {
     if (i >= octaves) break;
     float n = 1.0 - abs(snoise(vec3(p, 0.0)));
     n = n * n * w;

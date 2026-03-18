@@ -44,9 +44,9 @@ void main() {
   float a2 = time * 0.13 + low  * 1.0;
   float a3 = time * 0.08 + high * 1.5 + atkHigh * 3.0;
 
-  float n1 = fbm(vec3(rotate(wp, vec2(0.0),  a1) * (1.6 + mid  * 2.0), time * 0.08 + abs(dMid) * 0.5), 5);
-  float n2 = fbm(vec3(rotate(wp, vec2(0.0), -a2) * (2.8 + high * 2.5), time * 0.12), 4);
-  float n3 = rmf(   rotate(wp, vec2(0.0),   a3) * (2.0 + sub  * 1.8 + atkBass * 2.0), 4);
+  float n1 = fbm(vec3(rotate(wp, vec2(0.0),  a1) * (1.6 + mid  * 2.0), time * 0.08 + abs(dMid) * 0.5), 3);
+  float n2 = fbm(vec3(rotate(wp, vec2(0.0), -a2) * (2.8 + high * 2.5), time * 0.12), 3);
+  float n3 = rmf(   rotate(wp, vec2(0.0),   a3) * (2.0 + sub  * 1.8 + atkBass * 2.0), 3);
 
   float surface = n1 * 0.45 + n2 * 0.35 + n3 * 0.20;
 

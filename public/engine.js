@@ -25,7 +25,13 @@ SCENES.forEach((s, i) => {
 const gl = canvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: false });
 if (!gl) { statusEl.textContent = 'WebGL not supported'; return; }
 
-// ---- Resize + FBOs ----------------------------------------------
+// ---- Render resolution scale ------------------------------------
+// Shaders run at RENDER_SCALE × screen resolution, then upscale.
+// 0.5 = quarter the pixels → ~4× faster on Pi. Barely visible on blurry shaders.
+const RENDER_SCALE = 0.5;
+let fboW = 1, fboH = 1;
+
+// ---- FBOs -------------------------------------------------------
 let fbos = [], pingpong = 0;
 
 function createFBO(w, h) {
@@ -44,14 +50,15 @@ function createFBO(w, h) {
 
 function recreateFBOs() {
   fbos.forEach(f => { gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fbo); });
-  const w = canvas.width, h = canvas.height;
-  fbos = [createFBO(w, h), createFBO(w, h)];
+  fbos = [createFBO(fboW, fboH), createFBO(fboW, fboH)];
   pingpong = 0;
 }
 
 function resize() {
   canvas.width  = window.innerWidth;
   canvas.height = window.innerHeight;
+  fboW = Math.max(1, Math.floor(canvas.width  * RENDER_SCALE));
+  fboH = Math.max(1, Math.floor(canvas.height * RENDER_SCALE));
   gl.viewport(0, 0, canvas.width, canvas.height);
   if (fbos.length) recreateFBOs();
 }
@@ -202,17 +209,16 @@ function render(timestamp) {
   const u    = uniforms[currentScene];
   if (!prog || !u) { requestAnimationFrame(render); return; }
 
-  const w = canvas.width, h = canvas.height;
   const readFBO  = fbos[pingpong];
   const writeFBO = fbos[1 - pingpong];
 
-  // Scene → writeFBO
+  // Scene → writeFBO (at reduced resolution)
   gl.bindFramebuffer(gl.FRAMEBUFFER, writeFBO.fbo);
-  gl.viewport(0, 0, w, h);
+  gl.viewport(0, 0, fboW, fboH);
   gl.useProgram(prog);
   bindQuad(prog);
   gl.uniform1f(u.time, t);
-  gl.uniform2f(u.resolution, w, h);
+  gl.uniform2f(u.resolution, fboW, fboH);
   gl.uniform4f(u.bands,  bands[0],  bands[1],  bands[2],  bands[3]);
   gl.uniform4f(u.onset,  onset[0],  onset[1],  onset[2],  onset[3]);
   gl.uniform4f(u.delta,  delta[0],  delta[1],  delta[2],  delta[3]);
@@ -221,15 +227,15 @@ function render(timestamp) {
   gl.uniform1i(u.backbuffer, 0);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-  // Blit → canvas
+  // Blit writeFBO → canvas (upscale to full resolution)
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.viewport(0, 0, w, h);
+  gl.viewport(0, 0, canvas.width, canvas.height);
   gl.useProgram(blitProg);
   bindQuad(blitProg);
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, writeFBO.tex);
   gl.uniform1i(blitUniforms.tex, 0);
-  gl.uniform2f(blitUniforms.res, w, h);
+  gl.uniform2f(blitUniforms.res, canvas.width, canvas.height);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
   pingpong = 1 - pingpong;

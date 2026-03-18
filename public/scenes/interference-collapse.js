@@ -27,7 +27,7 @@ void main() {
   // ---- Field 1: fbm, rotates with bass ----
   float freq1  = 2.5 + low  * 6.0;
   float speed1 = time * 0.18 + sub * 1.5;
-  float f1 = fbm(vec3(rotate(wp, vec2(0.0), speed1) * freq1, speed1 * 0.5), 5);
+  float f1 = fbm(vec3(rotate(wp, vec2(0.0), speed1) * freq1, speed1 * 0.5), 3);
 
   // ---- Field 2: snoise, counter-rotates with highs ----
   float freq2  = 2.6 + mid  * 6.0;

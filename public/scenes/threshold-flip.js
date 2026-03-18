@@ -32,8 +32,8 @@ void main() {
 
   // ---- Mode A: crystalline, cold ----
   float t1  = time * 0.07;
-  float na1 = fbm(vec3(p * 2.2, t1), 5);
-  float na2 = fbm(vec3(rotate(p, vec2(0.0), time * 0.04) * 5.5, t1 * 1.3), 4);
+  float na1 = fbm(vec3(p * 2.2, t1), 3);
+  float na2 = fbm(vec3(rotate(p, vec2(0.0), time * 0.04) * 5.5, t1 * 1.3), 3);
   float na3 = snoise(vec3(p * 9.0, t1 * 1.8)) * 0.5 + 0.5;
   float surfA = na1 * 0.50 + na2 * 0.35 + na3 * 0.15;
 
@@ -51,9 +51,9 @@ void main() {
   // Bass attack warps B faster: rotation accelerates on transient
   float rotB = time * 1.5 + sub * 4.0 + atkBass * 8.0;
   vec2  prB  = rotate(p, vec2(0.0), rotB);
-  float nb1  = fbm(vec3(prB * (2.5 + low * 3.0), time * 0.45 + atkBass * 2.0), 4);
+  float nb1  = fbm(vec3(prB * (2.5 + low * 3.0), time * 0.45 + atkBass * 2.0), 3);
   float nb2  = voronoi(vec3(p  * (3.0 + mid * 9.0), time * 0.55 + sub + atkBass)).x;
-  float nb3  = rmf(prB * (1.8 + high * 2.0), 4);
+  float nb3  = rmf(prB * (1.8 + high * 2.0), 3);
   float surfB = nb1 * 0.25 + nb2 * 0.45 + nb3 * 0.30;
 
   // B gets brighter and faster on onset

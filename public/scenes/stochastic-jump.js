@@ -33,9 +33,9 @@ void main() {
 
   vec2 pr = rotate(p, vec2(0.0), rAngle + time * 0.1);
 
-  float n0 = fbm(vec3(pr * rScale, time * 0.15), 5);
+  float n0 = fbm(vec3(pr * rScale, time * 0.15), 3);
   float n1 = voronoi(vec3(pr * rScale * 0.6, time * 0.12)).x; // already clamped 0..1
-  float n2 = rmf(pr * rScale * 0.4, 4);                       // already clamped 0..1
+  float n2 = rmf(pr * rScale * 0.4, 3);                       // already clamped 0..1
 
   float surface = n0;
   if (rMode > 0.33) surface = mix(n0, n1, (rMode - 0.33) * 3.0);
