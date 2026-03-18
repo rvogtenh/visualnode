@@ -1,0 +1,12 @@
+{
+  "name": "visual-node-mvp",
+  "version": "0.1.0",
+  "description": "Audio-reactive WebGL shader — local MVP for Visual Node (Raspberry Pi 5 + PiSound)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
