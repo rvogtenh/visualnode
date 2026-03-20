@@ -340,28 +340,43 @@ function render(timestamp) {
 resize();
 recreateFBOs();
 
-startBtn.addEventListener('click', async () => {
-  statusEl.textContent = 'Connecting…';
-  connectWebSocket();
-  // Give WebSocket a moment to connect
-  await new Promise(r => setTimeout(r, 300));
+function autoStart() {
+  startScr.style.display = 'none';
+  requestAnimationFrame(render);
+  document.documentElement.requestFullscreen().catch(() => {});
+}
 
-  if (wsConnected) {
+// Try to auto-connect on page load — auto-starts if server responds
+connectWebSocket();
+statusEl.textContent = 'Connecting to server…';
+let autoStartTimer = setTimeout(() => {
+  // Server not reachable within 1.5s → show manual start
+  statusEl.textContent = 'No server — click START for local audio';
+}, 1500);
+
+ws.addEventListener('message', function onFirstMsg(e) {
+  const msg = JSON.parse(e.data);
+  if (msg.type === 'state' || msg.type === 'audio') {
+    clearTimeout(autoStartTimer);
     statusEl.textContent = 'Server audio active';
-    startScr.style.display = 'none';
-    requestAnimationFrame(render);
-    document.documentElement.requestFullscreen().catch(() => {});
+    autoStart();
+    ws.removeEventListener('message', onFirstMsg);
+  }
+});
+
+startBtn.addEventListener('click', async () => {
+  clearTimeout(autoStartTimer);
+  if (wsConnected) {
+    autoStart();
+    return;
+  }
+  // Fallback: local getUserMedia
+  statusEl.textContent = 'Requesting audio…';
+  const ok = await startAudio();
+  if (ok) {
+    autoStart();
   } else {
-    // Fallback: local getUserMedia
-    statusEl.textContent = 'Requesting audio…';
-    const ok = await startAudio();
-    if (ok) {
-      startScr.style.display = 'none';
-      requestAnimationFrame(render);
-      document.documentElement.requestFullscreen().catch(() => {});
-    } else {
-      statusEl.textContent = 'Audio error: ' + (window._audioError || 'unknown');
-    }
+    statusEl.textContent = 'Audio error: ' + (window._audioError || 'unknown');
   }
 });
 
