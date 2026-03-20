@@ -162,6 +162,11 @@ function startAudio(callback) {
 
   proc.on('close', (code) => {
     console.log(`[audio] rec process closed (code ${code})`);
+    if (code !== 0) {
+      // PipeWire node may not be ready yet — retry after 3s
+      console.log('[audio] retrying in 3s…');
+      setTimeout(() => startAudio(callback), 3000);
+    }
   });
 }
 
