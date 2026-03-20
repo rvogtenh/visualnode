@@ -127,6 +127,54 @@ const blitUniforms = {
   res: gl.getUniformLocation(blitProg, 'u_res'),
 };
 
+// ---- WebSocket audio/midi source --------------------------------
+let wsConnected = false;
+
+function connectWebSocket() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${proto}//${location.host}`);
+
+  ws.onopen = () => {
+    wsConnected = true;
+    console.log('[ws] connected — server-side audio/midi active');
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'audio') {
+      bands[0] = msg.bands[0]; bands[1] = msg.bands[1];
+      bands[2] = msg.bands[2]; bands[3] = msg.bands[3];
+      onset[0] = msg.onset[0]; onset[1] = msg.onset[1];
+      onset[2] = msg.onset[2]; onset[3] = msg.onset[3];
+      delta[0] = msg.delta[0]; delta[1] = msg.delta[1];
+      delta[2] = msg.delta[2]; delta[3] = msg.delta[3];
+    } else if (msg.type === 'midi') {
+      handleMidi(msg);
+    }
+  };
+
+  ws.onerror = () => { wsConnected = false; };
+  ws.onclose = () => {
+    wsConnected = false;
+    console.log('[ws] disconnected');
+    // retry after 3s
+    setTimeout(connectWebSocket, 3000);
+  };
+}
+
+function handleMidi(msg) {
+  // Scene switch via pushbutton (CC 64-70)
+  if (msg.name === 'scene' && msg.value > 0.5) {
+    const n = msg.scene;
+    if (n >= 0 && n < SCENES.length) {
+      currentScene = n;
+      shaderSel.value = currentScene;
+      recreateFBOs();
+    }
+  }
+  // Placeholder for future param mapping
+}
+
 // ---- Audio analysis --------------------------------------------
 let bands  = [0, 0, 0, 0];
 let onset  = [0, 0, 0, 0]; // positive attack (hold + decay), 0..1
@@ -214,7 +262,7 @@ function render(timestamp) {
       `fps: ${fps} | bass: ${bands[0].toFixed(2)} | mid: ${bands[2].toFixed(2)} | high: ${bands[3].toFixed(2)}`;
   }
 
-  getBands();
+  if (!wsConnected) getBands();  // only in client-mode fallback
 
   const prog = programs[currentScene];
   const u    = uniforms[currentScene];
@@ -258,15 +306,29 @@ resize();
 recreateFBOs();
 
 startBtn.addEventListener('click', async () => {
-  statusEl.textContent = 'Requesting audio…';
-  const ok = await startAudio();
-  if (ok) {
+  statusEl.textContent = 'Connecting…';
+  connectWebSocket();
+  // Give WebSocket a moment to connect
+  await new Promise(r => setTimeout(r, 300));
+
+  if (wsConnected) {
+    statusEl.textContent = 'Server audio active';
     startScr.style.display = 'none';
     ui.classList.remove('hidden');
     requestAnimationFrame(render);
     document.documentElement.requestFullscreen().catch(() => {});
   } else {
-    statusEl.textContent = 'Audio error: ' + (window._audioError || 'unknown');
+    // Fallback: local getUserMedia
+    statusEl.textContent = 'Requesting audio…';
+    const ok = await startAudio();
+    if (ok) {
+      startScr.style.display = 'none';
+      ui.classList.remove('hidden');
+      requestAnimationFrame(render);
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      statusEl.textContent = 'Audio error: ' + (window._audioError || 'unknown');
+    }
   }
 });
 

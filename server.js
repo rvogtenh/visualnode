@@ -1,4 +1,4 @@
-// Minimal static server with SSE live-reload — no dependencies.
+// Minimal static server with SSE live-reload and WebSocket support.
 // File changes in public/ are watched and broadcast to all connected browsers.
 
 const http = require('http');
@@ -33,7 +33,7 @@ fs.watch(PUBLIC, { recursive: true }, (_eventType, filename) => {
 });
 
 // ---- HTTP server -----------------------------------------------
-http.createServer((req, res) => {
+const server = http.createServer((req, res) => {
 
   // SSE endpoint for live-reload
   if (req.url === '/__reload') {
@@ -64,7 +64,54 @@ http.createServer((req, res) => {
     res.end(data);
   });
 
-}).listen(PORT, () => {
+});
+
+server.listen(PORT, () => {
   console.log(`Visual Node  →  http://localhost:${PORT}`);
+  console.log(`WebSocket    →  ws://localhost:${PORT}`);
   console.log(`Live-reload active (watching public/)`);
 });
+
+// ---- WebSocket server ------------------------------------------
+const wsClients = new Set();
+
+function broadcast(obj) {
+  const msg = JSON.stringify(obj);
+  for (const ws of wsClients) {
+    if (ws.readyState === 1 /* OPEN */) {
+      try { ws.send(msg); } catch (_) {}
+    }
+  }
+}
+
+let WebSocketServer;
+try {
+  WebSocketServer = require('ws').Server;
+} catch (_) {
+  console.warn('[ws] "ws" package not found — WebSocket support disabled. Run: npm install ws');
+}
+
+if (WebSocketServer) {
+  const wss = new WebSocketServer({ server });
+
+  wss.on('connection', (ws) => {
+    wsClients.add(ws);
+    console.log(`[ws] client connected (total: ${wsClients.size})`);
+
+    ws.on('close', () => {
+      wsClients.delete(ws);
+      console.log(`[ws] client disconnected (total: ${wsClients.size})`);
+    });
+  });
+}
+
+// ---- Audio / MIDI modules --------------------------------------
+try {
+  const audio = require('./audio.js');
+  audio.startAudio(data => broadcast({ type: 'audio', ...data }));
+} catch (_) {}
+
+try {
+  const midi = require('./midi.js');
+  midi.startMidi(event => broadcast({ type: 'midi', ...event }));
+} catch (_) {}
