@@ -1,4 +1,4 @@
-// THRESHOLD FLIP — v5
+// THRESHOLD FLIP — v4
 // onset.x (Bass-Attack) beschleunigt den Warp in Mode B
 // onset.w (High-Attack) erzeugt einen Weiss-Blitz unabhängig vom Threshold
 // delta treibt einen kurzen "Riss" in Mode A auf Transienten
@@ -16,24 +16,22 @@ void main() {
   float sub  = bands.x * 3.0;
   float low  = bands.y * 2.5;
   float mid  = bands.z * 2.0;
-  float high = bands.w * 7.0;
+  float high = bands.w * 3.0;
 
-  // Steady-state energy (slow changes) — high gets equal weight now
-  float energy = sub * 0.45 + low * 0.35 + mid * 0.30 + high * 0.40;
+  // Steady-state energy (slow changes)
+  float energy = sub * 0.45 + low * 0.35 + mid * 0.25 + high * 0.20;
 
   // Attack signals — react to sudden amplitude increase
   float atkBass = onset.x;  // bass attack: 0..1, decays fast
   float atkHigh = onset.w;  // high attack: 0..1
 
-  // Combined trigger: bass OR high attack tips it over
-  // onset of ANY band contributes — reacts to sine tones at any frequency
-  float atkAny = onset.x * 0.40 + onset.y * 0.40 + onset.z * 0.40 + onset.w * 0.50;
-  float trigger = max(energy, max(atkBass * 0.90, atkHigh * 1.2)) + atkAny;
-  float threshold = 0.10;
-  float inB = smoothstep(threshold - 0.02, threshold + 0.12, trigger);
+  // Combined trigger: steady energy OR a strong bass attack tips it over
+  float trigger = max(energy, atkBass * 0.75);
+  float threshold = 0.22;
+  float inB = smoothstep(threshold - 0.04, threshold + 0.04, trigger);
 
   // ---- Mode A: crystalline, cold ----
-  float t1  = time * 0.14 + mid * 0.3;
+  float t1  = time * 0.07;
   float na1 = fbm(vec3(p * 2.2, t1), 3);
   float na2 = fbm(vec3(rotate(p, vec2(0.0), time * 0.04) * 5.5, t1 * 1.3), 3);
   float na3 = snoise(vec3(p * 9.0, t1 * 1.8)) * 0.5 + 0.5;
@@ -43,7 +41,7 @@ void main() {
   float crack = abs(delta.z) * 2.5;
   surfA = mix(surfA, 1.0 - surfA, crack * smoothstep(0.3, 0.8, surfA));
 
-  float pulseA = 1.0 + mid * 1.0 + sub * 0.5;
+  float pulseA = 1.0 + mid * 0.6;
   vec3 colA  = mix(black, blue, smoothstep(0.20, 0.60, surfA)) * pulseA;
   colA       = mix(colA,  teal, smoothstep(0.55, 0.88, surfA) * pulseA);
   colA       = mix(colA,  cyan, smoothstep(0.80, 1.00, surfA) * (0.3 + high * 0.5));
@@ -51,7 +49,7 @@ void main() {
 
   // ---- Mode B: chaotic, hot — attack drives speed ----
   // Bass attack warps B faster: rotation accelerates on transient
-  float rotB = time * 1.5 + sub * 4.0 + atkBass * 8.0 + atkHigh * 6.0;
+  float rotB = time * 1.5 + sub * 4.0 + atkBass * 8.0;
   vec2  prB  = rotate(p, vec2(0.0), rotB);
   float nb1  = fbm(vec3(prB * (2.5 + low * 3.0), time * 0.45 + atkBass * 2.0), 3);
   float nb2  = voronoi(vec3(p  * (3.0 + mid * 9.0), time * 0.55 + sub + atkBass)).x;
@@ -67,7 +65,7 @@ void main() {
 
   // ---- Backbuffer crossfade ----
   vec4 prev  = texture2D(backbuffer, pn);
-  vec3 froze = mix(prev.rgb * 0.60, colA, 0.45);
+  vec3 froze = mix(prev.rgb * 0.78, colA, 0.30);
   vec3 col   = mix(froze, colB, inB);
 
   // Flash at threshold edge
@@ -80,7 +78,7 @@ void main() {
   // Bass attack: warm bloom independent of mode
   col = mix(col, orange, atkBass * atkBass * 0.45);
 
-  col = mix(col, col * 1.8, 0.50);
+  col = mix(col, col * 1.6, 0.45);
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }
 `

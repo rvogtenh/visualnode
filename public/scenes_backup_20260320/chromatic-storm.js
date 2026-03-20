@@ -1,4 +1,4 @@
-// CHROMATIC STORM — v4
+// CHROMATIC STORM — v3
 // onset / delta machen Amplitudensprünge direkt sichtbar:
 // - onset.x (Bass-Attack): Warp-Spitze, Rotationsbeschleunigung, Orange-Bloom
 // - onset.w (High-Attack): Weissblitz + Hue-Sprung zur Komplementärfarbe
@@ -24,16 +24,12 @@ void main() {
   float dMid    = delta.z;   // mid change (signed, amplified)
   float dBass   = delta.x;   // bass change (signed)
 
-  // Zoom/breathe: image expands on loud, contracts on quiet
-  float breathe = 1.0 + energy * 0.50 + atkBass * 0.35;
-  vec2 pz = p / breathe;  // zoomed coordinate
-
   // ---- Warp pass 1: bass drives space — attack spikes it ----
-  float wx1 = snoise(vec3(pz * 1.5,       time * 0.10));
-  float wy1 = snoise(vec3(pz * 1.5 + 5.3, time * 0.10));
+  float wx1 = snoise(vec3(p * 1.5,       time * 0.10));
+  float wy1 = snoise(vec3(p * 1.5 + 5.3, time * 0.10));
   // Attack adds a sudden warp surge, then decays with onset
-  float warpStr = 0.30 + sub * 1.4 + atkBass * 2.0 + energy * 0.6;
-  vec2 wp = pz + vec2(wx1, wy1) * warpStr;
+  float warpStr = 0.35 + sub * 1.0 + atkBass * 1.6;
+  vec2 wp = p + vec2(wx1, wy1) * warpStr;
 
   // ---- Warp pass 2: mid/high turbulence + delta jitter ----
   float wx2 = snoise(vec3(wp * 2.8 + 1.7, time * 0.16 + mid));
@@ -48,9 +44,9 @@ void main() {
   float a2 = time * 0.13 + low  * 1.0;
   float a3 = time * 0.08 + high * 1.5 + atkHigh * 3.0;
 
-  float n1 = fbm(vec3(rotate(pz, vec2(0.0),  a1) * (1.6 + mid  * 2.0), time * 0.08 + abs(dMid) * 0.5), 3);
-  float n2 = fbm(vec3(rotate(pz, vec2(0.0), -a2) * (2.8 + high * 2.5), time * 0.12), 3);
-  float n3 = rmf(   rotate(pz, vec2(0.0),   a3) * (2.0 + sub  * 1.8 + atkBass * 2.0), 3);
+  float n1 = fbm(vec3(rotate(wp, vec2(0.0),  a1) * (1.6 + mid  * 2.0), time * 0.08 + abs(dMid) * 0.5), 3);
+  float n2 = fbm(vec3(rotate(wp, vec2(0.0), -a2) * (2.8 + high * 2.5), time * 0.12), 3);
+  float n3 = rmf(   rotate(wp, vec2(0.0),   a3) * (2.0 + sub  * 1.8 + atkBass * 2.0), 3);
 
   float surface = n1 * 0.45 + n2 * 0.35 + n3 * 0.20;
 
@@ -66,8 +62,8 @@ void main() {
   vec4 prev = texture2D(backbuffer, pn + drift);
   // On falling edge (negative delta): freeze image slightly → contrast with next attack
   float falling  = max(0.0, -dBass);
-  float fbk = 0.72 - energy * 0.30 + falling * 0.30;
-  surface = mix(prev.r * fbk, surface, 0.35 + energy * 0.50 + atkBass * 0.35);
+  float fbk = 0.68 - energy * 0.20 + falling * 0.25;
+  surface = mix(prev.r * fbk, surface, 0.40 + energy * 0.40 + atkBass * 0.30);
 
   // ---- Color ----
   float baseHue  = fract(time * 0.03 + sub * 0.10);
@@ -87,7 +83,7 @@ void main() {
   col      = mix(col,   c3, smoothstep(0.62, 0.94, surface));
 
   // Broad energy flash
-  col = mix(col, white, smoothstep(0.55, 0.90, energy) * 0.55);
+  col = mix(col, white, smoothstep(0.70, 1.00, energy) * 0.45);
 
   // Bass attack: hot orange bloom
   col = mix(col, orange, atkBass * atkBass * 0.60);

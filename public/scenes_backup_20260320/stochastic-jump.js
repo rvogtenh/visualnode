@@ -2,7 +2,6 @@
 // Zufällige Parameterwechsel — Tempo der Sprünge = Audio-Energie
 // Fix: blend war 0.2 → surface blieb nahe 0 → schwarz.
 //      smoothstep-Schwellen zu hoch. Sub-Gating entfernt.
-// v2: Calmer jumps, irregular rhythm
 
 registerScene({
   id: 'stochastic-jump',
@@ -18,15 +17,9 @@ void main() {
   float high   = bands.w * 2.5;
   float energy = (sub + low + mid + high) * 0.35;
 
-  // At low energy, slow things down further
-  float gate = 0.5 + smoothstep(0.1, 0.6, energy) * 0.5;
-
   // Jump speed driven by energy
-  float jumpSpeed = 0.35 + energy * 1.5;
-  jumpSpeed *= gate;
-  // Occasionally hold a frame (skips the transition) using a slow secondary hash
-  float holdHash = fract(sin(floor(time * jumpSpeed) * 57.3 + 9.1) * 43758.5);
-  float jumpTime  = floor(time * jumpSpeed * (0.7 + holdHash * 0.6));
+  float jumpSpeed = 0.8 + energy * 3.5;
+  float jumpTime  = floor(time * jumpSpeed);
 
   float s0 = fract(sin(jumpTime * 127.1 + 1.0) * 43758.5);
   float s1 = fract(sin(jumpTime * 311.7 + 2.0) * 43758.5);
@@ -38,7 +31,7 @@ void main() {
   float rMode  = s2;
   float rHue   = s3;
 
-  vec2 pr = rotate(p, vec2(0.0), rAngle + time * 0.06);
+  vec2 pr = rotate(p, vec2(0.0), rAngle + time * 0.1);
 
   float n0 = fbm(vec3(pr * rScale, time * 0.15), 3);
   float n1 = voronoi(vec3(pr * rScale * 0.6, time * 0.12)).x; // already clamped 0..1

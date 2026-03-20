@@ -1,4 +1,4 @@
-// INTERFERENCE COLLAPSE — v3
+// INTERFERENCE COLLAPSE — v2
 // Mehr Bewegung: Domain-Warp vor den Interferenz-Feldern, dritte Rotationsebene,
 // Hue-Shift durch Bass, autonome Drift auch ohne Audio.
 
@@ -22,24 +22,20 @@ void main() {
   float warpT = time * 0.08;
   float wx = snoise(vec3(p * 1.2,       warpT));
   float wy = snoise(vec3(p * 1.2 + 3.7, warpT));
-  vec2 wp = p + vec2(wx, wy) * (0.12 + sub * 0.55 + rms * 0.35);
-
-  // ---- Energy-driven zoom: field breathes with overall RMS ----
-  float zoom = 1.0 + rms * 0.6 + onset.x * 0.4;
-  wp = wp * zoom;
+  vec2 wp = p + vec2(wx, wy) * (0.18 + sub * 0.45);
 
   // ---- Field 1: fbm, rotates with bass ----
-  float freq1  = 2.0 + low * 5.0 + high * 4.0;
-  float speed1 = time * (0.12 + low * 0.15) + sub * 2.0;
+  float freq1  = 2.5 + low  * 6.0;
+  float speed1 = time * 0.18 + sub * 1.5;
   float f1 = fbm(vec3(rotate(wp, vec2(0.0), speed1) * freq1, speed1 * 0.5), 3);
 
   // ---- Field 2: snoise, counter-rotates with highs ----
   float freq2  = 2.6 + mid  * 6.0;
-  float speed2 = time * (0.15 + high * 0.20) + high * 2.2;
+  float speed2 = time * 0.21 + high * 1.5;
   float f2 = snoise(vec3(rotate(wp, vec2(0.15, 0.1), -speed2) * freq2, speed2 * 0.4)) * 0.5 + 0.5;
 
   // ---- Field 3: fast voronoi layer — adds granular detail ----
-  float f3 = voronoi(vec3(wp * (2.5 + mid * 5.0 + high * 5.0), time * 0.25 + sub * 0.8)).x;
+  float f3 = voronoi(vec3(wp * (3.0 + mid * 4.0), time * 0.25 + sub * 0.8)).x;
 
   // ---- Interference ----
   float product  = f1 * f2;
@@ -57,8 +53,8 @@ void main() {
 
   // ---- Feedback ----
   vec2 drift = vec2(
-    sin(time * 0.09 + low)  * (0.006 + sub  * 0.024),
-    cos(time * 0.07 + high) * (0.005 + high * 0.020)
+    sin(time * 0.09 + low)  * (0.006 + sub  * 0.016),
+    cos(time * 0.07 + high) * (0.005 + high * 0.012)
   );
   vec4  prev   = texture2D(backbuffer, pn + drift);
   float fbkStr = 0.58 - (mid + high) * 0.04;

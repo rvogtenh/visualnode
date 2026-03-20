@@ -343,6 +343,13 @@ shaderSel.addEventListener('change', () => {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'h' || e.key === 'H') ui.classList.toggle('hidden');
+  if (e.key === 'Backspace') {
+    e.preventDefault();
+    recreateFBOs();
+    infoEl.textContent = 'RESET v2 — ' + new Date().toLocaleTimeString();
+    ui.classList.remove('hidden');
+    setTimeout(() => ui.classList.add('hidden'), 3000);
+  }
   const n = parseInt(e.key);
   if (n >= 1 && n <= SCENES.length) {
     currentScene = n - 1;
