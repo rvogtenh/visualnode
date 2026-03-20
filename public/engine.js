@@ -1,5 +1,5 @@
 // engine.js — WebGL engine, audio analysis, render loop
-// Depends on: GLSL_HELPERS (glsl-helpers.js), SCENES (scenes/*.js)
+// Depends on: GLSL_HELPERS (glsl-helpers.js), SCENES + SCENES2 (scenes/*.js, scenes2/*.js)
 
 (function () {
 'use strict';
@@ -32,7 +32,7 @@ const RENDER_SCALE = 0.5;
 let fboW = 1, fboH = 1;
 
 // ---- FBOs -------------------------------------------------------
-let fbos = [], pingpong = 0;
+let fbos1 = [], fbos2 = [], pingpong1 = 0, pingpong2 = 0;
 
 function createFBO(w, h) {
   const tex = gl.createTexture();
@@ -48,11 +48,17 @@ function createFBO(w, h) {
   return { tex, fbo };
 }
 
-function recreateFBOs() {
-  fbos.forEach(f => { gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fbo); });
-  fbos = [createFBO(fboW, fboH), createFBO(fboW, fboH)];
-  pingpong = 0;
+function recreateFBOs1() {
+  fbos1.forEach(f => { gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fbo); });
+  fbos1 = [createFBO(fboW, fboH), createFBO(fboW, fboH)];
+  pingpong1 = 0;
 }
+function recreateFBOs2() {
+  fbos2.forEach(f => { gl.deleteTexture(f.tex); gl.deleteFramebuffer(f.fbo); });
+  fbos2 = [createFBO(fboW, fboH), createFBO(fboW, fboH)];
+  pingpong2 = 0;
+}
+function recreateFBOs() { recreateFBOs1(); recreateFBOs2(); }
 
 function resize() {
   canvas.width  = window.innerWidth;
@@ -60,7 +66,7 @@ function resize() {
   fboW = Math.max(1, Math.floor(canvas.width  * RENDER_SCALE));
   fboH = Math.max(1, Math.floor(canvas.height * RENDER_SCALE));
   gl.viewport(0, 0, canvas.width, canvas.height);
-  if (fbos.length) recreateFBOs();
+  if (fbos1.length) recreateFBOs();
 }
 window.addEventListener('resize', resize);
 
@@ -97,17 +103,7 @@ function bindQuad(prog) {
 }
 
 // ---- Build programs --------------------------------------------
-const vsSrc    = document.getElementById('vs').textContent;
-const blitFSrc = document.getElementById('fs-blit').textContent;
-
-const programs = SCENES.map(scene => {
-  try {
-    return buildProgram(vsSrc, window.GLSL_HELPERS + '\n' + scene.glsl);
-  } catch (e) {
-    console.error(`[${scene.name}] compile error:`, e.message);
-    return null;
-  }
-});
+const vsSrc = document.getElementById('vs').textContent;
 
 function getUniforms(prog) {
   return {
@@ -120,11 +116,29 @@ function getUniforms(prog) {
   };
 }
 
-const uniforms     = programs.map(p => p ? getUniforms(p) : null);
-const blitProg     = buildProgram(vsSrc, blitFSrc);
-const blitUniforms = {
-  tex: gl.getUniformLocation(blitProg, 'u_tex'),
-  res: gl.getUniformLocation(blitProg, 'u_res'),
+// Layer 1 programs from SCENES array
+const programs1 = SCENES.map(scene => {
+  try { return buildProgram(vsSrc, window.GLSL_HELPERS + '\n' + scene.glsl); }
+  catch (e) { console.error(`[L1:${scene.name}] compile error:`, e.message); return null; }
+});
+const uniforms1 = programs1.map(p => p ? getUniforms(p) : null);
+
+// Layer 2 programs from SCENES2 array
+const programs2 = SCENES2.map(scene => {
+  try { return buildProgram(vsSrc, window.GLSL_HELPERS + '\n' + scene.glsl); }
+  catch (e) { console.error(`[L2:${scene.name}] compile error:`, e.message); return null; }
+});
+const uniforms2 = programs2.map(p => p ? getUniforms(p) : null);
+
+// Blend program — takes both layer FBOs and outputs directly to canvas
+const blendFSrc = document.getElementById('fs-blend').textContent;
+const blendProg = buildProgram(vsSrc, blendFSrc);
+const blendU = {
+  layer1: gl.getUniformLocation(blendProg, 'u_layer1'),
+  layer2: gl.getUniformLocation(blendProg, 'u_layer2'),
+  res:    gl.getUniformLocation(blendProg, 'u_res'),
+  blend:  gl.getUniformLocation(blendProg, 'u_blend'),
+  mode:   gl.getUniformLocation(blendProg, 'u_mode'),
 };
 
 // ---- WebSocket audio/midi source --------------------------------
@@ -163,16 +177,16 @@ function connectWebSocket() {
 }
 
 function handleMidi(msg) {
-  // Scene switch via pushbutton (CC 64-70)
+  // Pushbuttons 64-70 → Layer 1 scene switch
   if (msg.name === 'scene' && msg.value > 0.5) {
     const n = msg.scene;
     if (n >= 0 && n < SCENES.length) {
-      currentScene = n;
-      shaderSel.value = currentScene;
-      recreateFBOs();
+      currentScene[0] = n;
+      shaderSel.value = currentScene[0];
+      recreateFBOs1();
     }
   }
-  // Placeholder for future param mapping
+  // TODO: CC 56-63 → Layer 2 scene switch (when midi.js updated)
 }
 
 // ---- Audio analysis --------------------------------------------
@@ -246,7 +260,11 @@ function getBands() {
 }
 
 // ---- Render loop -----------------------------------------------
-let currentScene = 0;
+let currentScene = [0, 0]; // [layer1_scene_index, layer2_scene_index]
+let blendAmount = 0.0;  // 0 = only Layer1, 1 = only Layer2
+let blendMode   = 1;    // 0=hardcut, 1=crossfade, 2=additive, 3=multiply
+const BLEND_NAMES = ['hardcut', 'crossfade', 'additive', 'multiply'];
+
 let startTime = null;
 let frameCount = 0, lastFpsTime = 0, fps = 0;
 
@@ -258,46 +276,55 @@ function render(timestamp) {
   if (timestamp - lastFpsTime > 1000) {
     fps = Math.round(frameCount * 1000 / (timestamp - lastFpsTime));
     frameCount = 0; lastFpsTime = timestamp;
-    infoEl.textContent =
-      `fps: ${fps} | bass: ${bands[0].toFixed(2)} | mid: ${bands[2].toFixed(2)} | high: ${bands[3].toFixed(2)}`;
+    const n1 = SCENES[currentScene[0]]  ? SCENES[currentScene[0]].name  : '-';
+    const n2 = SCENES2[currentScene[1]] ? SCENES2[currentScene[1]].name : '-';
+    infoEl.textContent = `fps: ${fps} | L1: ${n1} | L2: ${n2} | blend: ${blendAmount.toFixed(2)} [${BLEND_NAMES[blendMode]}]`;
   }
 
-  if (!wsConnected) getBands();  // only in client-mode fallback
+  if (!wsConnected) getBands();
 
-  const prog = programs[currentScene];
-  const u    = uniforms[currentScene];
-  if (!prog || !u) { requestAnimationFrame(render); return; }
+  // Helper: render one layer into its write FBO
+  function renderLayer(programs, uniforms, scene, fbos, pingpong) {
+    const prog = programs[scene];
+    const u    = uniforms[scene];
+    if (!prog || !u) return pingpong;
+    const readFBO  = fbos[pingpong];
+    const writeFBO = fbos[1 - pingpong];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, writeFBO.fbo);
+    gl.viewport(0, 0, fboW, fboH);
+    gl.useProgram(prog);
+    bindQuad(prog);
+    gl.uniform1f(u.time, t);
+    gl.uniform2f(u.resolution, fboW, fboH);
+    gl.uniform4f(u.bands,  bands[0],  bands[1],  bands[2],  bands[3]);
+    gl.uniform4f(u.onset,  onset[0],  onset[1],  onset[2],  onset[3]);
+    gl.uniform4f(u.delta,  delta[0],  delta[1],  delta[2],  delta[3]);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, readFBO.tex);
+    gl.uniform1i(u.backbuffer, 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    return 1 - pingpong;
+  }
 
-  const readFBO  = fbos[pingpong];
-  const writeFBO = fbos[1 - pingpong];
+  pingpong1 = renderLayer(programs1, uniforms1, currentScene[0], fbos1, pingpong1);
+  pingpong2 = renderLayer(programs2, uniforms2, currentScene[1], fbos2, pingpong2);
 
-  // Scene → writeFBO (at reduced resolution)
-  gl.bindFramebuffer(gl.FRAMEBUFFER, writeFBO.fbo);
-  gl.viewport(0, 0, fboW, fboH);
-  gl.useProgram(prog);
-  bindQuad(prog);
-  gl.uniform1f(u.time, t);
-  gl.uniform2f(u.resolution, fboW, fboH);
-  gl.uniform4f(u.bands,  bands[0],  bands[1],  bands[2],  bands[3]);
-  gl.uniform4f(u.onset,  onset[0],  onset[1],  onset[2],  onset[3]);
-  gl.uniform4f(u.delta,  delta[0],  delta[1],  delta[2],  delta[3]);
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, readFBO.tex);
-  gl.uniform1i(u.backbuffer, 0);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-  // Blit writeFBO → canvas (upscale to full resolution)
+  // Blend both layers → canvas
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.viewport(0, 0, canvas.width, canvas.height);
-  gl.useProgram(blitProg);
-  bindQuad(blitProg);
+  gl.useProgram(blendProg);
+  bindQuad(blendProg);
   gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, writeFBO.tex);
-  gl.uniform1i(blitUniforms.tex, 0);
-  gl.uniform2f(blitUniforms.res, canvas.width, canvas.height);
+  gl.bindTexture(gl.TEXTURE_2D, fbos1[pingpong1].tex);
+  gl.uniform1i(blendU.layer1, 0);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, fbos2[pingpong2].tex);
+  gl.uniform1i(blendU.layer2, 1);
+  gl.uniform2f(blendU.res, canvas.width, canvas.height);
+  gl.uniform1f(blendU.blend, blendAmount);
+  gl.uniform1i(blendU.mode, blendMode);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-  pingpong = 1 - pingpong;
   requestAnimationFrame(render);
 }
 
@@ -337,24 +364,44 @@ document.addEventListener('keydown', (e) => {
 });
 
 shaderSel.addEventListener('change', () => {
-  currentScene = parseInt(shaderSel.value);
-  recreateFBOs();
+  currentScene[0] = parseInt(shaderSel.value);
+  recreateFBOs1();
 });
 
+const L2_KEYS = ['q','w','e','r','t','z','u','i'];
+
 document.addEventListener('keydown', e => {
+  if (e.key === 'Tab') { e.preventDefault(); ui.classList.toggle('hidden'); }
   if (e.key === 'h' || e.key === 'H') ui.classList.toggle('hidden');
+
   if (e.key === 'Backspace') {
     e.preventDefault();
     recreateFBOs();
-    infoEl.textContent = 'RESET v2 — ' + new Date().toLocaleTimeString();
+    infoEl.textContent = 'RESET — ' + new Date().toLocaleTimeString();
     ui.classList.remove('hidden');
     setTimeout(() => ui.classList.add('hidden'), 3000);
   }
+
+  if (e.key === 'b' || e.key === 'B') {
+    blendMode = (blendMode + 1) % BLEND_NAMES.length;
+  }
+
+  if (e.key === 'ArrowUp')   { e.preventDefault(); blendAmount = Math.min(1, +(blendAmount + 0.05).toFixed(2)); }
+  if (e.key === 'ArrowDown') { e.preventDefault(); blendAmount = Math.max(0, +(blendAmount - 0.05).toFixed(2)); }
+
+  // Layer 1: keys 1–8
   const n = parseInt(e.key);
-  if (n >= 1 && n <= SCENES.length) {
-    currentScene = n - 1;
-    shaderSel.value = currentScene;
-    recreateFBOs();
+  if (n >= 1 && n <= 8 && n <= SCENES.length) {
+    currentScene[0] = n - 1;
+    shaderSel.value = currentScene[0];
+    recreateFBOs1();
+  }
+
+  // Layer 2: keys q,w,e,r,t,z,u,i
+  const l2 = L2_KEYS.indexOf(e.key.toLowerCase());
+  if (l2 >= 0 && l2 < SCENES2.length) {
+    currentScene[1] = l2;
+    recreateFBOs2();
   }
 });
 
