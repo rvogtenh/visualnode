@@ -136,6 +136,17 @@ let audioCtx, analyser, dataArray;
 
 async function startAudio() {
   try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error(
+        'getUserMedia not available.\n' +
+        'Browser blocks microphone access on non-secure origins (HTTP + IP address).\n\n' +
+        'Fix options:\n' +
+        '  A) SSH tunnel:  ssh -L 3000:localhost:3000 patch@192.168.1.87\n' +
+        '     then open:   http://localhost:3000\n\n' +
+        '  B) Chrome flag: chrome://flags/#unsafely-treat-insecure-origin-as-secure\n' +
+        '     add entry:   http://192.168.1.87:3000'
+      );
+    }
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     const src    = audioCtx.createMediaStreamSource(stream);
@@ -253,9 +264,14 @@ startBtn.addEventListener('click', async () => {
     startScr.style.display = 'none';
     ui.classList.remove('hidden');
     requestAnimationFrame(render);
+    document.documentElement.requestFullscreen().catch(() => {});
   } else {
     statusEl.textContent = 'Audio error: ' + (window._audioError || 'unknown');
   }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && startScr.style.display !== 'none') startBtn.click();
 });
 
 shaderSel.addEventListener('change', () => {
