@@ -107,10 +107,16 @@ function applyKey(key) {
 }
 
 function applyMidiToState(event) {
-  // CC 64-71: Layer 1 scene switch
+  // Note 48-55: Layer 1 scene switch (Faderfox buttons send noteon)
+  if (event.type === 'noteon' && event.note >= 48 && event.note <= 55 && event.value > 0.5)
+    { state.scene1 = event.note - 48; return true; }
+  // Note 56-63: Layer 2 scene switch
+  if (event.type === 'noteon' && event.note >= 56 && event.note <= 63 && event.value > 0.5)
+    { state.scene2 = event.note - 56; return true; }
+  // CC 48-55: Layer 1 scene switch (fallback if CC mode)
   if (event.name === 'scene1' && event.value > 0.5)
     { state.scene1 = event.scene; return true; }
-  // CC 56-63: Layer 2 scene switch
+  // CC 56-63: Layer 2 scene switch (fallback if CC mode)
   if (event.name === 'scene2' && event.value > 0.5)
     { state.scene2 = event.scene; return true; }
   // CC 112: master blend
