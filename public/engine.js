@@ -143,10 +143,11 @@ const blendU = {
 
 // ---- WebSocket audio/midi source --------------------------------
 let wsConnected = false;
+let ws = null;
 
 function connectWebSocket() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${proto}//${location.host}`);
+  ws = new WebSocket(`${proto}//${location.host}`);
 
   ws.onopen = () => {
     wsConnected = true;
@@ -162,6 +163,12 @@ function connectWebSocket() {
       onset[2] = msg.onset[2]; onset[3] = msg.onset[3];
       delta[0] = msg.delta[0]; delta[1] = msg.delta[1];
       delta[2] = msg.delta[2]; delta[3] = msg.delta[3];
+    } else if (msg.type === 'state') {
+      if (msg.scene1 !== currentScene[0]) { currentScene[0] = msg.scene1; recreateFBOs1(); }
+      if (msg.scene2 !== currentScene[1]) { currentScene[1] = msg.scene2; recreateFBOs2(); }
+      blendAmount = msg.blend;
+      blendMode   = msg.blendMode;
+      shaderSel.value = currentScene[0];
     } else if (msg.type === 'midi') {
       handleMidi(msg);
     }
@@ -170,6 +177,7 @@ function connectWebSocket() {
   ws.onerror = () => { wsConnected = false; };
   ws.onclose = () => {
     wsConnected = false;
+    ws = null;
     console.log('[ws] disconnected');
     // retry after 3s
     setTimeout(connectWebSocket, 3000);
@@ -341,7 +349,6 @@ startBtn.addEventListener('click', async () => {
   if (wsConnected) {
     statusEl.textContent = 'Server audio active';
     startScr.style.display = 'none';
-    ui.classList.remove('hidden');
     requestAnimationFrame(render);
     document.documentElement.requestFullscreen().catch(() => {});
   } else {
@@ -350,7 +357,6 @@ startBtn.addEventListener('click', async () => {
     const ok = await startAudio();
     if (ok) {
       startScr.style.display = 'none';
-      ui.classList.remove('hidden');
       requestAnimationFrame(render);
       document.documentElement.requestFullscreen().catch(() => {});
     } else {
@@ -368,7 +374,10 @@ shaderSel.addEventListener('change', () => {
   recreateFBOs1();
 });
 
-const L2_KEYS = ['q','w','e','r','t','z','u','i'];
+// Performance keys handled server-side (mirrors applyKey() in server.js)
+const PERF_KEYS = new Set(['b','B','ArrowUp','ArrowDown',
+                           '1','2','3','4','5','6','7','8',
+                           'q','w','e','r','t','z','u','i']);
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Tab') { e.preventDefault(); ui.classList.toggle('hidden'); }
@@ -378,30 +387,12 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     recreateFBOs();
     infoEl.textContent = 'RESET — ' + new Date().toLocaleTimeString();
-    ui.classList.remove('hidden');
-    setTimeout(() => ui.classList.add('hidden'), 3000);
   }
 
-  if (e.key === 'b' || e.key === 'B') {
-    blendMode = (blendMode + 1) % BLEND_NAMES.length;
-  }
-
-  if (e.key === 'ArrowUp')   { e.preventDefault(); blendAmount = Math.min(1, +(blendAmount + 0.05).toFixed(2)); }
-  if (e.key === 'ArrowDown') { e.preventDefault(); blendAmount = Math.max(0, +(blendAmount - 0.05).toFixed(2)); }
-
-  // Layer 1: keys 1–8
-  const n = parseInt(e.key);
-  if (n >= 1 && n <= 8 && n <= SCENES.length) {
-    currentScene[0] = n - 1;
-    shaderSel.value = currentScene[0];
-    recreateFBOs1();
-  }
-
-  // Layer 2: keys q,w,e,r,t,z,u,i
-  const l2 = L2_KEYS.indexOf(e.key.toLowerCase());
-  if (l2 >= 0 && l2 < SCENES2.length) {
-    currentScene[1] = l2;
-    recreateFBOs2();
+  // Performance keys → send to server (syncs all clients + monitoring)
+  if (PERF_KEYS.has(e.key)) {
+    e.preventDefault();
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'key', key: e.key }));
   }
 });
 

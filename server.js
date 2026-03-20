@@ -91,12 +91,50 @@ try {
   console.warn('[ws] "ws" package not found — WebSocket support disabled. Run: npm install ws');
 }
 
+// ---- Shared performance state ----------------------------------
+const L2_KEYS = ['q','w','e','r','t','z','u','i'];
+const state = { scene1: 0, scene2: 0, blend: 0.0, blendMode: 1 };
+
+function applyKey(key) {
+  const n = parseInt(key);
+  if (n >= 1 && n <= 8)           { state.scene1 = n - 1; return true; }
+  const l2 = L2_KEYS.indexOf(key.toLowerCase());
+  if (l2 >= 0)                    { state.scene2 = l2;    return true; }
+  if (key === 'ArrowUp')   { state.blend = Math.min(1, +(state.blend + 0.05).toFixed(2)); return true; }
+  if (key === 'ArrowDown') { state.blend = Math.max(0, +(state.blend - 0.05).toFixed(2)); return true; }
+  if (key === 'b' || key === 'B') { state.blendMode = (state.blendMode + 1) % 4; return true; }
+  return false;
+}
+
+function applyMidiToState(event) {
+  // CC 64-70: Layer 1 scene switch
+  if (event.name === 'scene' && event.value > 0.5 && event.cc >= 64 && event.cc <= 71)
+    { state.scene1 = event.cc - 64; return true; }
+  // CC 56-63: Layer 2 scene switch
+  if (event.name === 'unknown' && event.cc >= 56 && event.cc <= 63 && event.value > 0.5)
+    { state.scene2 = event.cc - 56; return true; }
+  // CC 112: master blend (clamp to 0-1)
+  if (event.cc === 112) { state.blend = Math.max(0, Math.min(1, event.value)); return true; }
+  return false;
+}
+
 if (WebSocketServer) {
   const wss = new WebSocketServer({ server });
 
   wss.on('connection', (ws) => {
     wsClients.add(ws);
     console.log(`[ws] client connected (total: ${wsClients.size})`);
+    // Send current state immediately to new client
+    ws.send(JSON.stringify({ type: 'state', ...state }));
+
+    ws.on('message', (raw) => {
+      try {
+        const msg = JSON.parse(raw);
+        if (msg.type === 'key' && applyKey(msg.key)) {
+          broadcast({ type: 'state', ...state });
+        }
+      } catch (err) { console.error('[ws] invalid message:', err.message); }
+    });
 
     ws.on('close', () => {
       wsClients.delete(ws);
@@ -113,5 +151,8 @@ try {
 
 try {
   const midi = require('./midi.js');
-  midi.startMidi(event => broadcast({ type: 'midi', ...event }));
+  midi.startMidi(event => {
+    if (applyMidiToState(event)) broadcast({ type: 'state', ...state });
+    broadcast({ type: 'midi', ...event }); // intentional: monitoring/controller page
+  });
 } catch (_) {}
