@@ -52,9 +52,9 @@ function startMidi(callback) {
 
     input.on('program', (msg) => {
       const { channel: ch, number: program } = msg;
-      if (ch === 14 && program >= 0 && program <= 7) {
-        console.log(`[midi] program ch:${ch} prog:${program}`);
-        callback({ type: 'pc', name: 'toggle', scene: program, value: program });
+      console.log(`[midi] program ch:${ch} prog:${program}`);
+      if (program >= 0 && program <= 7) {
+        callback({ type: 'pc', name: 'toggle', ch, scene: program, value: program });
       }
     });
   }
