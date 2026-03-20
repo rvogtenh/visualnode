@@ -185,16 +185,17 @@ function connectWebSocket() {
 }
 
 function handleMidi(msg) {
-  // Pushbuttons 64-70 → Layer 1 scene switch
-  if (msg.name === 'scene' && msg.value > 0.5) {
+  // Scene switches are handled via server state broadcast.
+  // handleMidi provides local fallback and handles encoder/param events.
+  if (msg.name === 'scene1' && msg.value > 0.5) {
     const n = msg.scene;
-    if (n >= 0 && n < SCENES.length) {
-      currentScene[0] = n;
-      shaderSel.value = currentScene[0];
-      recreateFBOs1();
-    }
+    if (n >= 0 && n < SCENES.length) { currentScene[0] = n; shaderSel.value = n; recreateFBOs1(); }
   }
-  // TODO: CC 56-63 → Layer 2 scene switch (when midi.js updated)
+  if (msg.name === 'scene2' && msg.value > 0.5) {
+    const n = msg.scene;
+    if (n >= 0 && n < SCENES2.length) { currentScene[1] = n; recreateFBOs2(); }
+  }
+  // Encoders (CC 88-95: L1 params, CC 96-103: L2 params) — reserved for future use
 }
 
 // ---- Audio analysis --------------------------------------------

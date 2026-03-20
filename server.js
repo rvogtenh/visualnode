@@ -107,14 +107,18 @@ function applyKey(key) {
 }
 
 function applyMidiToState(event) {
-  // CC 64-70: Layer 1 scene switch
-  if (event.name === 'scene' && event.value > 0.5 && event.cc >= 64 && event.cc <= 71)
-    { state.scene1 = event.cc - 64; return true; }
+  // CC 64-71: Layer 1 scene switch
+  if (event.name === 'scene1' && event.value > 0.5)
+    { state.scene1 = event.scene; return true; }
   // CC 56-63: Layer 2 scene switch
-  if (event.name === 'unknown' && event.cc >= 56 && event.cc <= 63 && event.value > 0.5)
-    { state.scene2 = event.cc - 56; return true; }
-  // CC 112: master blend (clamp to 0-1)
-  if (event.cc === 112) { state.blend = Math.max(0, Math.min(1, event.value)); return true; }
+  if (event.name === 'scene2' && event.value > 0.5)
+    { state.scene2 = event.scene; return true; }
+  // CC 112: master blend
+  if (event.name === 'master')
+    { state.blend = Math.max(0, Math.min(1, event.value)); return true; }
+  // PC 0-3: blend mode (hardcut / crossfade / additive / multiply)
+  if (event.type === 'pc' && event.scene >= 0 && event.scene <= 3)
+    { state.blendMode = event.scene; return true; }
   return false;
 }
 

@@ -8,13 +8,14 @@ try {
 function parseCc(ch, cc, v, callback) {
   const norm = v / 127;
   if (ch === 0) {
-    if (cc === 112) return callback({ type: 'cc', name: 'master', value: norm });
-    if (cc === 37)  return callback({ type: 'cc', name: 'param1', value: norm });
-    if (cc === 38)  return callback({ type: 'cc', name: 'param2', value: norm });
-    if (cc === 39)  return callback({ type: 'cc', name: 'param3', value: norm });
-    if (cc === 40)  return callback({ type: 'cc', name: 'param4', value: norm });
-    if (cc >= 64 && cc <= 70) return callback({ type: 'cc', name: 'scene', scene: cc - 64, value: norm });
-    if (cc >= 88 && cc <= 103) return callback({ type: 'cc', name: 'encoder', index: cc - 88, value: norm });
+    if (cc === 112) return callback({ type: 'cc', name: 'master', cc, value: norm });
+    if (cc === 37)  return callback({ type: 'cc', name: 'param1', cc, value: norm });
+    if (cc === 38)  return callback({ type: 'cc', name: 'param2', cc, value: norm });
+    if (cc === 39)  return callback({ type: 'cc', name: 'param3', cc, value: norm });
+    if (cc === 40)  return callback({ type: 'cc', name: 'param4', cc, value: norm });
+    if (cc >= 56 && cc <= 63) return callback({ type: 'cc', name: 'scene2', cc, scene: cc - 56, value: norm });
+    if (cc >= 64 && cc <= 71) return callback({ type: 'cc', name: 'scene1', cc, scene: cc - 64, value: norm });
+    if (cc >= 88 && cc <= 103) return callback({ type: 'cc', name: 'encoder', cc, index: cc - 88, value: norm });
   }
   callback({ type: 'cc', name: 'unknown', ch, cc, value: norm });
 }
