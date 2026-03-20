@@ -168,6 +168,7 @@ function connectWebSocket() {
       if (msg.scene2 !== currentScene[1]) { currentScene[1] = msg.scene2; recreateFBOs2(); }
       blendAmount = msg.blend;
       blendMode   = msg.blendMode;
+      autoMode    = msg.autoMode !== undefined ? msg.autoMode : -1;
       shaderSel.value = currentScene[0];
     } else if (msg.type === 'midi') {
       handleMidi(msg);
@@ -272,7 +273,9 @@ function getBands() {
 let currentScene = [0, 0]; // [layer1_scene_index, layer2_scene_index]
 let blendAmount = 0.0;  // 0 = only Layer1, 1 = only Layer2
 let blendMode   = 1;    // 0=hardcut, 1=crossfade, 2=additive, 3=multiply
+let autoMode    = -1;   // -1=off, 4=energy, 5=rhythmic, 6=stochastic, 7=algorithmic
 const BLEND_NAMES = ['hardcut', 'crossfade', 'additive', 'multiply'];
+const AUTO_NAMES  = { '-1': 'off', '4': 'energy', '5': 'rhythmic', '6': 'stochastic', '7': 'algorithmic' };
 
 let startTime = null;
 let frameCount = 0, lastFpsTime = 0, fps = 0;
@@ -287,7 +290,8 @@ function render(timestamp) {
     frameCount = 0; lastFpsTime = timestamp;
     const n1 = SCENES[currentScene[0]]  ? SCENES[currentScene[0]].name  : '-';
     const n2 = SCENES2[currentScene[1]] ? SCENES2[currentScene[1]].name : '-';
-    infoEl.textContent = `fps: ${fps} | L1: ${n1} | L2: ${n2} | blend: ${blendAmount.toFixed(2)} [${BLEND_NAMES[blendMode]}]`;
+    const autoStr = autoMode >= 4 ? ` | auto: ${AUTO_NAMES[autoMode]}` : '';
+    infoEl.textContent = `fps: ${fps} | L1: ${n1} | L2: ${n2} | blend: ${blendAmount.toFixed(2)} [${BLEND_NAMES[blendMode]}]${autoStr}`;
   }
 
   if (!wsConnected) getBands();
@@ -391,9 +395,13 @@ shaderSel.addEventListener('change', () => {
 });
 
 // Performance keys handled server-side (mirrors applyKey() in server.js)
-const PERF_KEYS = new Set(['b','B','ArrowUp','ArrowDown',
-                           '1','2','3','4','5','6','7','8',
-                           'q','w','e','r','t','z','u','i']);
+const PERF_KEYS = new Set([
+  '1','2','3','4','5','6','7','8',
+  'q','w','e','r','t','z','u','i',
+  'a','s','d','f',
+  'v','b','n','m',
+  'ArrowUp','ArrowDown',
+]);
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Tab') { e.preventDefault(); ui.classList.toggle('hidden'); }
