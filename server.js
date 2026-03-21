@@ -123,27 +123,23 @@ function applyKey(key) {
     else                     state.blend = Math.max(0, +(state.blend - 0.05).toFixed(2));
     return true;
   }
-  // Blend modes (b cycles, s/d/f direct; b also exits auto)
-  if (key === 'b' || key === 'B') {
-    state.blendMode = (state.blendMode + 1) % 4;
-    state.autoMode  = -1;
-    return true;
-  }
-  if (key === 's') { state.blendMode = 1; return true; }
-  if (key === 'd') { state.blendMode = 2; return true; }
-  if (key === 'f') { state.blendMode = 3; return true; }
-  // Auto mode cycle (a key)
+  // Blend modes: b cycles, n/m/,/. direct (b also exits auto)
+  if (key === 'b' || key === 'B') { state.blendMode = (state.blendMode + 1) % 4; state.autoMode = -1; return true; }
+  if (key === 'n' || key === 'N') { state.blendMode = 0; return true; }
+  if (key === 'm' || key === 'M') { state.blendMode = 1; return true; }
+  if (key === ',')                 { state.blendMode = 2; return true; }
+  if (key === '.')                 { state.blendMode = 3; return true; }
+  // Auto modes: a cycles, s/d/f/g direct
   if (key === 'a' || key === 'A') {
-    const idx = AUTO_CYCLE.indexOf(state.autoMode);
+    const idx  = AUTO_CYCLE.indexOf(state.autoMode);
     const next = AUTO_CYCLE[(idx + 1) % AUTO_CYCLE.length];
-    if (next === -1) state.autoMode = -1;
-    else activateAuto(next);
+    if (next === -1) state.autoMode = -1; else activateAuto(next);
     return true;
   }
-  // Direct auto mode keys
-  if (key === 'v' || key === 'V') { activateAuto(4); return true; }
-  if (key === 'n' || key === 'N') { activateAuto(6); return true; }
-  if (key === 'm' || key === 'M') { activateAuto(7); return true; }
+  if (key === 's' || key === 'S') { activateAuto(4); return true; }
+  if (key === 'd' || key === 'D') { activateAuto(5); return true; }
+  if (key === 'f' || key === 'F') { activateAuto(6); return true; }
+  if (key === 'g' || key === 'G') { activateAuto(7); return true; }
   return false;
 }
 
