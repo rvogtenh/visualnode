@@ -60,7 +60,11 @@ const server = http.createServer((req, res) => {
     if (err) { res.writeHead(404); res.end('Not found'); return; }
     const ext  = path.extname(filePath);
     const mime = MIME[ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': mime });
+    const noCache = mime.startsWith('text/') || mime === 'application/json';
+    res.writeHead(200, {
+      'Content-Type': mime,
+      ...(noCache ? { 'Cache-Control': 'no-store' } : {}),
+    });
     res.end(data);
   });
 
@@ -184,6 +188,7 @@ if (WebSocketServer) {
       try {
         const msg = JSON.parse(raw);
         if (msg.type === 'key' && applyKey(msg.key)) {
+          console.log(`[key] "${msg.key}" → autoMode:${state.autoMode} blend:${state.blend.toFixed(2)}`);
           broadcast({ type: 'state', ...state });
         }
       } catch (err) { console.error('[ws] invalid message:', err.message); }

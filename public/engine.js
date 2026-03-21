@@ -416,6 +416,7 @@ document.addEventListener('keydown', e => {
   // Performance keys → send to server (syncs all clients + monitoring)
   if (PERF_KEYS.has(e.key)) {
     e.preventDefault();
+    console.log('[key]', e.key, 'ws:', ws ? ws.readyState : 'null');
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'key', key: e.key }));
   }
 });
