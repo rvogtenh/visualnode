@@ -168,8 +168,8 @@ function applyMidiToState(event) {
     { state.blendMode = event.scene; state.autoMode = -1; return true; }
   // PC 4-7: automation mode (toggle off if same, else activate)
   if (event.type === 'pc' && event.scene >= 4 && event.scene <= 7) {
-    if (state.autoMode === event.scene) state.autoMode = -1;
-    else activateAuto(event.scene);
+    if (state.autoMode === event.scene) { state.autoMode = -1; console.log('[auto] off via MIDI'); }
+    else { activateAuto(event.scene); console.log(`[auto] mode ${event.scene} activated via MIDI`); }
     return true;
   }
   return false;

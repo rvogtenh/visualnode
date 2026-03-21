@@ -29,6 +29,16 @@ function startMidi(callback) {
     return;
   }
 
+  // Deduplicate: ignore identical discrete events within 50ms
+  // (PiSound exposes multiple virtual ports → same event fires N times)
+  const lastSeen = new Map();
+  function isDuplicate(key) {
+    const now = Date.now();
+    if (now - (lastSeen.get(key) || 0) < 50) return true;
+    lastSeen.set(key, now);
+    return false;
+  }
+
   for (const name of inputs) {
     const input = new easymidi.Input(name);
 
@@ -40,18 +50,20 @@ function startMidi(callback) {
 
     input.on('noteon', (msg) => {
       const { channel: ch, note, velocity: v } = msg;
+      if (isDuplicate(`noteon:${ch}:${note}`)) return;
       console.log(`[midi] noteon ch:${ch} note:${note} val:${(v / 127).toFixed(2)}`);
       callback({ type: 'noteon', ch, note, value: v / 127 });
     });
 
     input.on('noteoff', (msg) => {
       const { channel: ch, note, velocity: v } = msg;
-      console.log(`[midi] noteoff ch:${ch} note:${note} val:${(v / 127).toFixed(2)}`);
+      if (isDuplicate(`noteoff:${ch}:${note}`)) return;
       callback({ type: 'noteoff', ch, note, value: v / 127 });
     });
 
     input.on('program', (msg) => {
       const { channel: ch, number: program } = msg;
+      if (isDuplicate(`pc:${ch}:${program}`)) return;
       console.log(`[midi] program ch:${ch} prog:${program}`);
       if (program >= 0 && program <= 7) {
         callback({ type: 'pc', name: 'toggle', ch, scene: program, value: program });
