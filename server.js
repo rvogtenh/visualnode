@@ -103,6 +103,7 @@ const state = {
   autoMode: -1,        // -1=off, 4=energy, 5=rhythmic, 6=stochastic, 7=algorithmic
   autoLayer: 0,        // 0=all, 1=L1 only, 2=L2 only
   autoIntensity: 0.5,  // fader value in auto mode (0-1)
+  paused: false,
 };
 
 const AUTO_CYCLE = [-1, 4, 5, 6, 7]; // cycle order for 'a' key
@@ -129,10 +130,10 @@ function applyKey(key) {
   }
   // Blend modes: b cycles, n/m/,/. direct (b also exits auto)
   if (key === 'b' || key === 'B') { state.blendMode = (state.blendMode + 1) % 4; state.autoMode = -1; return true; }
-  if (key === 'n' || key === 'N') { state.blendMode = 0; return true; }
-  if (key === 'm' || key === 'M') { state.blendMode = 1; return true; }
-  if (key === ',')                 { state.blendMode = 2; return true; }
-  if (key === '.')                 { state.blendMode = 3; return true; }
+  if (key === 'n' || key === 'N') { state.blendMode = 0; state.autoMode = -1; return true; }
+  if (key === 'm' || key === 'M') { state.blendMode = 1; state.autoMode = -1; return true; }
+  if (key === ',')                 { state.blendMode = 2; state.autoMode = -1; return true; }
+  if (key === '.')                 { state.blendMode = 3; state.autoMode = -1; return true; }
   // Auto modes: a cycles, s/d/f/g direct
   if (key === 'a' || key === 'A') {
     const idx  = AUTO_CYCLE.indexOf(state.autoMode);
@@ -190,6 +191,14 @@ if (WebSocketServer) {
         if (msg.type === 'key' && applyKey(msg.key)) {
           console.log(`[key] "${msg.key}" → autoMode:${state.autoMode} blend:${state.blend.toFixed(2)}`);
           broadcast({ type: 'state', ...state });
+        } else if (msg.type === 'pause') {
+          state.paused = true;
+          console.log('[pause] paused');
+          broadcast({ type: 'pause' });
+        } else if (msg.type === 'resume') {
+          state.paused = false;
+          console.log('[pause] resumed');
+          broadcast({ type: 'resume' });
         }
       } catch (err) { console.error('[ws] invalid message:', err.message); }
     });

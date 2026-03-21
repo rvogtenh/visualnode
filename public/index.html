@@ -2,11 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
 <title>Visual Node MVP</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #000; overflow: hidden; cursor: none; }
-  canvas { display: block; width: 100vw; height: 100vh; }
+  body { background: #000; overflow: hidden; cursor: none; min-height: 100dvh; }
+  canvas { display: block; width: 100vw; height: 100dvh; }
 
   #ui {
     position: fixed; top: 0; left: 0; right: 0;
@@ -46,6 +49,7 @@
 <body>
 
 <canvas id="canvas"></canvas>
+<div id="pause-overlay" style="display:none; position:fixed; inset:0; background:#000; z-index:5;"></div>
 
 <div id="start-screen">
   <h1>VISUAL NODE</h1>
@@ -56,7 +60,7 @@
 <div id="ui" class="hidden">
   <div id="info">fps: — | L1: — | L2: — | blend: 0.00</div>
   <select id="shader-select"></select>
-  <div>Tab=UI &nbsp;|&nbsp; 1–8=L1 &nbsp;|&nbsp; q–i=L2 &nbsp;|&nbsp; ↑↓=blend &nbsp;|&nbsp; b/nm,.=blend &nbsp;|&nbsp; a/sdfg=auto &nbsp;|&nbsp; ⌫=reset</div>
+  <div>Tab=UI &nbsp;|&nbsp; 1–8=L1 &nbsp;|&nbsp; q–i=L2 &nbsp;|&nbsp; ↑↓=blend &nbsp;|&nbsp; b/nm,.=blend &nbsp;|&nbsp; a/sdfg=auto &nbsp;|&nbsp; ⌫=pause · Space=resume · 0=reset</div>
 </div>
 
 <!-- Vertex shader (shared) -->
@@ -91,11 +95,12 @@ void main() {
   if (u_mode == 0) {
     col = mix(c1, c2, u_blend);
   } else if (u_mode == 1) {
-    col = u_blend < 0.5 ? c1 : c2;
-  } else if (u_mode == 2) {
     col = clamp(c1 + c2 * u_blend, 0.0, 1.0);
-  } else {
+  } else if (u_mode == 2) {
     col = mix(c1, c1 * c2, u_blend);
+  } else {
+    float luma = dot(c2.rgb, vec3(0.299, 0.587, 0.114));
+    col = mix(c1, clamp(c1 + c2, 0.0, 1.0), luma * u_blend);
   }
   gl_FragColor = col;
 }

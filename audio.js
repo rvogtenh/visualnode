@@ -151,9 +151,9 @@ function startAudio(callback) {
   });
 
   proc.stderr.on('data', (data) => {
-    // rec writes informational lines to stderr — suppress unless it looks like an error
+    // rec/sox writes status info to stderr — only log real errors
     const msg = data.toString().trim();
-    if (msg) console.error('[audio] error:', msg);
+    if (msg && /error|fail|warn/i.test(msg)) console.error('[audio]', msg);
   });
 
   proc.on('error', (err) => {

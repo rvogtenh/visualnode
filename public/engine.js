@@ -152,6 +152,8 @@ function connectWebSocket() {
   ws.onopen = () => {
     wsConnected = true;
     console.log('[ws] connected — server-side audio/midi active');
+    if (startScr.style.display !== 'none')
+      statusEl.textContent = 'Server connected — press START';
   };
 
   ws.onmessage = (e) => {
@@ -170,9 +172,17 @@ function connectWebSocket() {
       blendMode   = msg.blendMode;
       autoMode    = msg.autoMode !== undefined ? msg.autoMode : -1;
       shaderSel.value = currentScene[0];
+      if (msg.paused === true  && !paused) applyPause();
+      if (msg.paused === false &&  paused) applyResume();
+    } else if (msg.type === 'pause') {
+      applyPause();
+    } else if (msg.type === 'resume') {
+      applyResume();
     } else if (msg.type === 'midi') {
       handleMidi(msg);
     }
+    // Any MIDI PC event triggers START if start screen is still visible
+    if (msg.type === 'pc' && startScr.style.display !== 'none') startBtn.click();
   };
 
   ws.onerror = () => { wsConnected = false; };
@@ -272,17 +282,38 @@ function getBands() {
 // ---- Render loop -----------------------------------------------
 let currentScene = [0, 0]; // [layer1_scene_index, layer2_scene_index]
 let blendAmount = 0.0;  // 0 = only Layer1, 1 = only Layer2
-let blendMode   = 1;    // 0=hardcut, 1=crossfade, 2=additive, 3=multiply
+let blendMode   = 0;    // 0=crossfade, 1=additive, 2=multiply, 3=lumina
 let autoMode    = -1;   // -1=off, 4=energy, 5=rhythmic, 6=stochastic, 7=algorithmic
-const BLEND_NAMES = ['crossfade', 'hardcut', 'additive', 'multiply'];
+const BLEND_NAMES = ['crossfade', 'additive', 'multiply', 'lumina'];
 const AUTO_NAMES  = { '-1': 'off', '4': 'energy', '5': 'rhythmic', '6': 'stochastic', '7': 'algorithmic' };
+
+let paused      = false;
+let pauseStart  = 0, pausedTotal = 0;
 
 let startTime = null;
 let frameCount = 0, lastFpsTime = 0, fps = 0;
 
+function applyPause() {
+  if (paused) return;
+  paused = true;
+  pauseStart = performance.now();
+  document.getElementById('pause-overlay').style.display = 'block';
+  if (audioCtx) audioCtx.suspend();
+  infoEl.textContent = 'PAUSE';
+}
+
+function applyResume() {
+  if (!paused) return;
+  pausedTotal += performance.now() - pauseStart;
+  paused = false;
+  document.getElementById('pause-overlay').style.display = 'none';
+  if (audioCtx) audioCtx.resume();
+  requestAnimationFrame(render);
+}
+
 function render(timestamp) {
   if (!startTime) startTime = timestamp;
-  const t = (timestamp - startTime) / 1000.0;
+  const t = (timestamp - startTime - pausedTotal) / 1000.0;
 
   frameCount++;
   if (timestamp - lastFpsTime > 1000) {
@@ -338,7 +369,7 @@ function render(timestamp) {
   gl.uniform1i(blendU.mode, blendMode);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-  requestAnimationFrame(render);
+  if (!paused) requestAnimationFrame(render);
 }
 
 // ---- UI / Init -------------------------------------------------
@@ -346,31 +377,26 @@ resize();
 recreateFBOs();
 
 function autoStart() {
+  // Reset pause state in case server sent paused:true before user started
+  paused = false;
+  pausedTotal = 0;
+  document.getElementById('pause-overlay').style.display = 'none';
   startScr.style.display = 'none';
   requestAnimationFrame(render);
-  document.documentElement.requestFullscreen().catch(() => {});
+  // iOS (Safari/Firefox) don't support Fullscreen API → scroll fallback
+  document.documentElement.requestFullscreen().catch(() => {
+    setTimeout(() => window.scrollTo(0, 1), 300);
+  });
 }
 
 // Try to auto-connect on page load — auto-starts if server responds
 connectWebSocket();
 statusEl.textContent = 'Connecting to server…';
-let autoStartTimer = setTimeout(() => {
-  // Server not reachable within 1.5s → show manual start
-  statusEl.textContent = 'No server — click START for local audio';
+setTimeout(() => {
+  if (!wsConnected) statusEl.textContent = 'No server — click START for local audio';
 }, 1500);
 
-ws.addEventListener('message', function onFirstMsg(e) {
-  const msg = JSON.parse(e.data);
-  if (msg.type === 'state' || msg.type === 'audio') {
-    clearTimeout(autoStartTimer);
-    statusEl.textContent = 'Server audio active';
-    autoStart();
-    ws.removeEventListener('message', onFirstMsg);
-  }
-});
-
 startBtn.addEventListener('click', async () => {
-  clearTimeout(autoStartTimer);
   if (wsConnected) {
     autoStart();
     return;
@@ -386,7 +412,10 @@ startBtn.addEventListener('click', async () => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && startScr.style.display !== 'none') startBtn.click();
+  if ((e.key === 'Enter' || e.key === ' ') && startScr.style.display !== 'none') {
+    e.preventDefault();
+    startBtn.click();
+  }
 });
 
 shaderSel.addEventListener('change', () => {
@@ -407,10 +436,26 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Tab') { e.preventDefault(); ui.classList.toggle('hidden'); }
   if (e.key === 'h' || e.key === 'H') ui.classList.toggle('hidden');
 
-  if (e.key === 'Backspace') {
+  if (e.key === '0') {
     e.preventDefault();
     recreateFBOs();
     infoEl.textContent = 'RESET — ' + new Date().toLocaleTimeString();
+  }
+
+  if (e.key === 'Backspace') {
+    e.preventDefault();
+    if (!paused) {
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'pause' }));
+      else applyPause();
+    }
+  }
+
+  if (e.key === ' ') {
+    e.preventDefault();
+    if (paused) {
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'resume' }));
+      else applyResume();
+    }
   }
 
   // Performance keys → send to server (syncs all clients + monitoring)
@@ -420,5 +465,6 @@ document.addEventListener('keydown', e => {
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'key', key: e.key }));
   }
 });
+
 
 })();
