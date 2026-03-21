@@ -398,8 +398,8 @@ shaderSel.addEventListener('change', () => {
 const PERF_KEYS = new Set([
   '1','2','3','4','5','6','7','8',
   'q','w','e','r','t','z','u','i',
-  'a','s','d','f',
-  'v','b','n','m',
+  'a','A','s','d','f',
+  'v','V','b','B','n','N','m','M',
   'ArrowUp','ArrowDown',
 ]);
 

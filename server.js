@@ -101,15 +101,11 @@ const state = {
   autoIntensity: 0.5,  // fader value in auto mode (0-1)
 };
 
-const AUTO_KEYS = { 'v': 4, 'b': 5, 'n': 6, 'm': 7 };
+const AUTO_CYCLE = [-1, 4, 5, 6, 7]; // cycle order for 'a' key
 
-function toggleAuto(mode) {
-  if (state.autoMode === mode) {
-    state.autoMode = -1;
-  } else {
-    state.autoIntensity = state.blend;
-    state.autoMode = mode;
-  }
+function activateAuto(mode) {
+  state.autoIntensity = state.blend;
+  state.autoMode = mode;
 }
 
 function applyKey(key) {
@@ -127,11 +123,27 @@ function applyKey(key) {
     else                     state.blend = Math.max(0, +(state.blend - 0.05).toFixed(2));
     return true;
   }
-  if (key === 'a') { state.blendMode = 0; return true; }
+  // Blend modes (b cycles, s/d/f direct; b also exits auto)
+  if (key === 'b' || key === 'B') {
+    state.blendMode = (state.blendMode + 1) % 4;
+    state.autoMode  = -1;
+    return true;
+  }
   if (key === 's') { state.blendMode = 1; return true; }
   if (key === 'd') { state.blendMode = 2; return true; }
   if (key === 'f') { state.blendMode = 3; return true; }
-  if (AUTO_KEYS[key.toLowerCase()] !== undefined) { toggleAuto(AUTO_KEYS[key.toLowerCase()]); return true; }
+  // Auto mode cycle (a key)
+  if (key === 'a' || key === 'A') {
+    const idx = AUTO_CYCLE.indexOf(state.autoMode);
+    const next = AUTO_CYCLE[(idx + 1) % AUTO_CYCLE.length];
+    if (next === -1) state.autoMode = -1;
+    else activateAuto(next);
+    return true;
+  }
+  // Direct auto mode keys
+  if (key === 'v' || key === 'V') { activateAuto(4); return true; }
+  if (key === 'n' || key === 'N') { activateAuto(6); return true; }
+  if (key === 'm' || key === 'M') { activateAuto(7); return true; }
   return false;
 }
 
@@ -151,12 +163,15 @@ function applyMidiToState(event) {
     else                     state.blend = Math.max(0, Math.min(1, event.value));
     return true;
   }
-  // PC 0-3: blend mode
+  // PC 0-3: blend mode + exit auto
   if (event.type === 'pc' && event.scene >= 0 && event.scene <= 3)
-    { state.blendMode = event.scene; return true; }
-  // PC 4-7: automation mode (toggle)
-  if (event.type === 'pc' && event.scene >= 4 && event.scene <= 7)
-    { toggleAuto(event.scene); return true; }
+    { state.blendMode = event.scene; state.autoMode = -1; return true; }
+  // PC 4-7: automation mode (toggle off if same, else activate)
+  if (event.type === 'pc' && event.scene >= 4 && event.scene <= 7) {
+    if (state.autoMode === event.scene) state.autoMode = -1;
+    else activateAuto(event.scene);
+    return true;
+  }
   return false;
 }
 
@@ -207,37 +222,37 @@ setInterval(() => {
   const { onset, bands } = lastAudio;
 
   // Animate blend (slow oscillation, speed by intensity)
-  const blendSpeed = 0.006 + intensity * 0.03;
+  const blendSpeed = 0.002 + intensity * 0.012;
   state.blend = +Math.max(0, Math.min(1, state.blend + blendSpeed * autoBlendDir)).toFixed(3);
   if (state.blend >= 1) autoBlendDir = -1;
   if (state.blend <= 0) autoBlendDir =  1;
 
   // Scene switching
   if (state.autoMode === 4) {
-    // Energy: onset-triggered, intensity = sensitivity
-    const threshold = 0.85 - intensity * 0.65;
+    // Energy: onset-triggered, intensity = sensitivity; min 2s cooldown
+    const threshold = 0.85 - intensity * 0.60;
     const peak = Math.max(onset[0], onset[1], onset[2], onset[3]);
-    if (peak > threshold && now - autoLastSwitch > 800) {
+    if (peak > threshold && now - autoLastSwitch > 2000) {
       autoSwitch(); autoLastSwitch = now;
       console.log(`[auto] energy switch → L1:${state.scene1} L2:${state.scene2}`);
     }
   } else if (state.autoMode === 5) {
-    // Rhythmic: fixed interval, intensity = speed (2s–30s)
-    const interval = 30000 - intensity * 28000;
+    // Rhythmic: fixed interval, intensity = speed (5s–60s)
+    const interval = 60000 - intensity * 55000;
     if (now - autoLastSwitch > interval) {
       autoSwitch(); autoLastSwitch = now;
       console.log(`[auto] rhythmic switch → L1:${state.scene1} L2:${state.scene2}`);
     }
   } else if (state.autoMode === 6) {
-    // Stochastic: random timing, intensity = frequency (1s–21s avg)
-    const avgMs = 21000 - intensity * 20000;
+    // Stochastic: random timing, intensity = frequency (3s–30s avg)
+    const avgMs = 30000 - intensity * 27000;
     if (now - autoLastSwitch > avgMs * (0.5 + Math.random())) {
       autoSwitchRandom(); autoLastSwitch = now;
       console.log(`[auto] stochastic switch → L1:${state.scene1} L2:${state.scene2}`);
     }
   } else if (state.autoMode === 7) {
-    // Algorithmic: audio-driven scene selection
-    const cooldown = 3000 - intensity * 2500;
+    // Algorithmic: audio-driven scene selection (2s–8s cooldown)
+    const cooldown = 8000 - intensity * 6000;
     if (now - autoLastSwitch > cooldown && Math.max(...bands) > 0.05) {
       const bassHeavy = bands[0] > 0.5 && bands[3] < 0.3;
       const highHeavy = bands[3] > 0.4;
