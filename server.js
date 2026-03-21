@@ -95,7 +95,7 @@ try {
 const L2_KEYS = ['q','w','e','r','t','z','u','i'];
 const state = {
   scene1: 0, scene2: 0,
-  blend: 0.0, blendMode: 1,
+  blend: 0.0, blendMode: 0,
   autoMode: -1,        // -1=off, 4=energy, 5=rhythmic, 6=stochastic, 7=algorithmic
   autoLayer: 0,        // 0=all, 1=L1 only, 2=L2 only
   autoIntensity: 0.5,  // fader value in auto mode (0-1)

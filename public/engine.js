@@ -274,7 +274,7 @@ let currentScene = [0, 0]; // [layer1_scene_index, layer2_scene_index]
 let blendAmount = 0.0;  // 0 = only Layer1, 1 = only Layer2
 let blendMode   = 1;    // 0=hardcut, 1=crossfade, 2=additive, 3=multiply
 let autoMode    = -1;   // -1=off, 4=energy, 5=rhythmic, 6=stochastic, 7=algorithmic
-const BLEND_NAMES = ['hardcut', 'crossfade', 'additive', 'multiply'];
+const BLEND_NAMES = ['crossfade', 'hardcut', 'additive', 'multiply'];
 const AUTO_NAMES  = { '-1': 'off', '4': 'energy', '5': 'rhythmic', '6': 'stochastic', '7': 'algorithmic' };
 
 let startTime = null;

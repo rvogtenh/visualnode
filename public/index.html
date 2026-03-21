@@ -89,9 +89,9 @@ void main() {
   vec4 c2 = texture2D(u_layer2, uv);
   vec4 col;
   if (u_mode == 0) {
-    col = u_blend < 0.5 ? c1 : c2;
-  } else if (u_mode == 1) {
     col = mix(c1, c2, u_blend);
+  } else if (u_mode == 1) {
+    col = u_blend < 0.5 ? c1 : c2;
   } else if (u_mode == 2) {
     col = clamp(c1 + c2 * u_blend, 0.0, 1.0);
   } else {
